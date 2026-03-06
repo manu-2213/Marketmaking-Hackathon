@@ -1,7 +1,12 @@
 import streamlit as st
 import pandas as pd
 import uuid
+import html as _html
 from supabase import create_client, Client
+
+def _esc(s: str) -> str:
+    """HTML-escape user-controlled strings before embedding in markup."""
+    return _html.escape(str(s)) if s else ""
 
 st.set_page_config(
     page_title="Market Making Hackathon",
@@ -12,115 +17,269 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 :root {
-    --bg:#07090f; --surface:#0f1520; --surface2:#161f2e; --surface3:#1c2a3e;
-    --border:#253347; --accent:#00ffaa; --accent2:#38bdf8; --accent3:#818cf8;
-    --danger:#f87171; --warn:#fbbf24; --green:#4ade80;
-    --text:#f1f5f9; --muted:#7a90a8; --mm:#c084fc;
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2332;
+    --surface3: #1f2b3d;
+    --surface-hover: #243044;
+    --border: #2a3a50;
+    --border-light: #334155;
+    --accent: #22d3ee;
+    --accent-glow: rgba(34,211,238,.15);
+    --accent2: #a78bfa;
+    --accent2-glow: rgba(167,139,250,.12);
+    --green: #34d399;
+    --green-glow: rgba(52,211,153,.12);
+    --red: #fb7185;
+    --red-glow: rgba(251,113,133,.12);
+    --warn: #fbbf24;
+    --warn-glow: rgba(251,191,36,.1);
+    --text: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --mm: #c084fc;
+    --gradient-primary: linear-gradient(135deg, #22d3ee, #a78bfa);
+    --gradient-warm: linear-gradient(135deg, #fbbf24, #fb923c);
+    --gradient-cool: linear-gradient(135deg, #34d399, #22d3ee);
 }
-html,body,[data-testid="stAppViewContainer"]{
-    background:var(--bg)!important;color:var(--text)!important;
-    font-family:'Syne',sans-serif!important;
+
+/* ── Base ── */
+html, body, [data-testid="stAppViewContainer"] {
+    background: var(--bg) !important;
+    color: var(--text) !important;
+    font-family: 'Inter', -apple-system, sans-serif !important;
 }
-[data-testid="stAppViewContainer"]{
+[data-testid="stAppViewContainer"] {
     background:
-        radial-gradient(ellipse 90% 45% at 50% -10%,rgba(0,255,170,.06) 0%,transparent 65%),
-        radial-gradient(ellipse 55% 35% at 90% 90%,rgba(56,189,248,.05) 0%,transparent 55%),
-        var(--bg)!important;
-}
-[data-testid="stSidebar"]{
-    background:var(--surface)!important;
-    border-right:1px solid var(--border)!important;
-}
-#MainMenu,footer,header{visibility:hidden;}
-[data-testid="stDecoration"]{display:none;}
-h1,h2,h3,h4{font-family:'Syne',sans-serif!important;letter-spacing:-.02em;color:var(--text)!important;}
-
-/* Metrics */
-[data-testid="stMetric"]{
-    background:var(--surface2)!important;
-    border:1px solid var(--border)!important;
-    border-radius:12px!important;padding:1.1rem 1.25rem!important;
-}
-[data-testid="stMetricLabel"]{color:#94a3b8!important;font-size:.72rem!important;text-transform:uppercase;letter-spacing:.12em;font-weight:600;}
-[data-testid="stMetricValue"]{color:var(--accent)!important;font-family:'Space Mono',monospace!important;font-size:1.5rem!important;font-weight:700;}
-
-/* Buttons */
-[data-testid="stButton"]>button{
-    background:var(--surface2)!important;border:1px solid var(--border)!important;
-    color:var(--text)!important;font-family:'Syne',sans-serif!important;
-    font-weight:700!important;border-radius:9px!important;transition:all .18s!important;
-    font-size:.9rem!important;
-}
-[data-testid="stButton"]>button:hover{
-    border-color:var(--accent)!important;color:var(--accent)!important;
-    background:rgba(0,255,170,.07)!important;box-shadow:0 0 20px rgba(0,255,170,.12)!important;
-}
-button[kind="primary"]{
-    background:var(--accent)!important;border-color:var(--accent)!important;
-    color:#020c0a!important;font-weight:800!important;
-}
-button[kind="primary"]:hover{
-    background:#00e699!important;border-color:#00e699!important;color:#020c0a!important;
-    box-shadow:0 0 28px rgba(0,255,170,.35)!important;
+        radial-gradient(ellipse 80% 50% at 20% -20%, rgba(34,211,238,.04) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 40% at 80% 110%, rgba(167,139,250,.04) 0%, transparent 60%),
+        radial-gradient(circle at 50% 50%, rgba(34,211,238,.01) 0%, transparent 50%),
+        var(--bg) !important;
 }
 
-/* Inputs */
+/* ── Sidebar ── */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0f1729 0%, #0a0e17 100%) !important;
+    border-right: 1px solid var(--border) !important;
+}
+[data-testid="stSidebar"]::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--gradient-primary);
+}
+
+/* ── Hide defaults ── */
+#MainMenu, footer, header { visibility: hidden; }
+[data-testid="stDecoration"] { display: none; }
+h1, h2, h3, h4 {
+    font-family: 'Inter', sans-serif !important;
+    letter-spacing: -.03em;
+    color: var(--text) !important;
+}
+
+/* ── Metrics ── */
+[data-testid="stMetric"] {
+    background: linear-gradient(135deg, var(--surface2), var(--surface)) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 16px !important;
+    padding: 1.25rem 1.5rem !important;
+    position: relative;
+    overflow: hidden;
+}
+[data-testid="stMetric"]::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--gradient-primary);
+    opacity: .6;
+}
+[data-testid="stMetricLabel"] {
+    color: var(--text-secondary) !important;
+    font-size: .7rem !important;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    font-weight: 600;
+}
+[data-testid="stMetricValue"] {
+    color: var(--accent) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 1.5rem !important;
+    font-weight: 700;
+}
+
+/* ── Buttons ── */
+[data-testid="stButton"] > button {
+    background: var(--surface2) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text) !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    border-radius: 12px !important;
+    transition: all .2s cubic-bezier(.4,0,.2,1) !important;
+    font-size: .88rem !important;
+    padding: .55rem 1.25rem !important;
+}
+[data-testid="stButton"] > button:hover {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+    background: var(--accent-glow) !important;
+    box-shadow: 0 0 24px rgba(34,211,238,.1), 0 4px 12px rgba(0,0,0,.3) !important;
+    transform: translateY(-1px) !important;
+}
+button[kind="primary"] {
+    background: linear-gradient(135deg, #22d3ee, #06b6d4) !important;
+    border-color: transparent !important;
+    color: #0a0e17 !important;
+    font-weight: 700 !important;
+    box-shadow: 0 4px 16px rgba(34,211,238,.2) !important;
+}
+button[kind="primary"]:hover {
+    background: linear-gradient(135deg, #67e8f9, #22d3ee) !important;
+    box-shadow: 0 6px 28px rgba(34,211,238,.35), 0 0 40px rgba(34,211,238,.1) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* ── Inputs ── */
 [data-testid="stNumberInput"] input,
-[data-testid="stTextInput"] input{
-    background:var(--surface3)!important;border:1px solid var(--border)!important;
-    color:var(--text)!important;border-radius:9px!important;
-    font-family:'Space Mono',monospace!important;font-size:.95rem!important;
+[data-testid="stTextInput"] input {
+    background: var(--surface3) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text) !important;
+    border-radius: 12px !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: .9rem !important;
+    transition: all .2s !important;
 }
 [data-testid="stNumberInput"] input:focus,
-[data-testid="stTextInput"] input:focus{
-    border-color:var(--accent)!important;box-shadow:0 0 0 2px rgba(0,255,170,.15)!important;
+[data-testid="stTextInput"] input:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px var(--accent-glow), 0 0 20px rgba(34,211,238,.08) !important;
 }
-[data-testid="stSelectbox"]>div>div{
-    background:var(--surface3)!important;border:1px solid var(--border)!important;
-    border-radius:9px!important;color:var(--text)!important;
+[data-testid="stSelectbox"] > div > div {
+    background: var(--surface3) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    color: var(--text) !important;
 }
-div[data-baseweb="select"] span{color:var(--text)!important;}
+div[data-baseweb="select"] span { color: var(--text) !important; }
 
-/* DataFrames */
-[data-testid="stDataFrame"]{border:1px solid var(--border)!important;border-radius:12px!important;overflow:hidden!important;}
-[data-testid="stDataFrame"] th{background:var(--surface2)!important;color:#94a3b8!important;font-size:.7rem!important;text-transform:uppercase;letter-spacing:.1em;}
-[data-testid="stDataFrame"] td{color:var(--text)!important;font-family:'Space Mono',monospace!important;font-size:.82rem!important;}
+/* ── DataFrames ── */
+[data-testid="stDataFrame"] {
+    border: 1px solid var(--border) !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,.2) !important;
+}
+[data-testid="stDataFrame"] th {
+    background: var(--surface2) !important;
+    color: var(--text-secondary) !important;
+    font-size: .68rem !important;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    font-weight: 600;
+}
+[data-testid="stDataFrame"] td {
+    color: var(--text) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: .8rem !important;
+}
 
-/* Progress */
-[data-testid="stProgressBar"]>div>div{background:linear-gradient(90deg,var(--accent),var(--accent2))!important;border-radius:4px!important;}
-[data-testid="stProgressBar"]>div{background:var(--surface2)!important;border-radius:4px!important;}
+/* ── Progress ── */
+[data-testid="stProgressBar"] > div > div {
+    background: var(--gradient-primary) !important;
+    border-radius: 6px !important;
+    box-shadow: 0 0 12px rgba(34,211,238,.3) !important;
+}
+[data-testid="stProgressBar"] > div {
+    background: var(--surface2) !important;
+    border-radius: 6px !important;
+    height: 6px !important;
+}
 
-/* Alerts */
-[data-testid="stAlert"]{border-radius:10px!important;border-width:0 0 0 3px!important;}
-[data-testid="stAlert"][data-type="info"]{background:rgba(56,189,248,.08)!important;border-color:var(--accent2)!important;color:#bae6fd!important;}
-[data-testid="stAlert"][data-type="success"]{background:rgba(74,222,128,.08)!important;border-color:var(--green)!important;color:#bbf7d0!important;}
-[data-testid="stAlert"][data-type="warning"]{background:rgba(251,191,36,.08)!important;border-color:var(--warn)!important;color:#fde68a!important;}
-[data-testid="stAlert"][data-type="error"]{background:rgba(248,113,113,.08)!important;border-color:var(--danger)!important;color:#fecaca!important;}
+/* ── Alerts ── */
+[data-testid="stAlert"] {
+    border-radius: 14px !important;
+    border-width: 0 0 0 3px !important;
+    backdrop-filter: blur(8px);
+}
+[data-testid="stAlert"][data-type="info"]    { background: rgba(34,211,238,.06) !important; border-color: var(--accent) !important; color: #a5f3fc !important; }
+[data-testid="stAlert"][data-type="success"] { background: rgba(52,211,153,.06) !important; border-color: var(--green) !important; color: #a7f3d0 !important; }
+[data-testid="stAlert"][data-type="warning"] { background: rgba(251,191,36,.06) !important; border-color: var(--warn) !important; color: #fde68a !important; }
+[data-testid="stAlert"][data-type="error"]   { background: rgba(251,113,133,.06) !important; border-color: var(--red) !important; color: #fecdd3 !important; }
 
-/* Tabs */
-[data-testid="stTabs"] [data-baseweb="tab-list"]{background:var(--surface)!important;border-bottom:1px solid var(--border)!important;gap:.5rem;}
-[data-testid="stTabs"] [data-baseweb="tab"]{color:var(--muted)!important;font-family:'Syne',sans-serif!important;font-weight:600!important;border-radius:8px 8px 0 0!important;}
-[data-testid="stTabs"] [aria-selected="true"]{color:var(--accent)!important;border-bottom:2px solid var(--accent)!important;}
+/* ── Tabs ── */
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+    background: transparent !important;
+    border-bottom: 1px solid var(--border) !important;
+    gap: .25rem;
+}
+[data-testid="stTabs"] [data-baseweb="tab"] {
+    color: var(--text-muted) !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    border-radius: 10px 10px 0 0 !important;
+    padding: .5rem 1rem !important;
+    transition: all .2s !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab"]:hover {
+    color: var(--text-secondary) !important;
+    background: var(--surface2) !important;
+}
+[data-testid="stTabs"] [aria-selected="true"] {
+    color: var(--accent) !important;
+    border-bottom: 2px solid var(--accent) !important;
+    background: var(--accent-glow) !important;
+}
 
-/* Radio */
-[data-testid="stRadio"] label{color:var(--text)!important;font-weight:600;}
+/* ── Radio ── */
+[data-testid="stRadio"] label { color: var(--text) !important; font-weight: 500; }
 
-/* Expander */
-[data-testid="stExpander"]{border:1px solid var(--border)!important;border-radius:11px!important;background:var(--surface)!important;}
-[data-testid="stExpander"] summary{color:var(--text)!important;font-weight:600;}
+/* ── Expander ── */
+[data-testid="stExpander"] {
+    border: 1px solid var(--border) !important;
+    border-radius: 14px !important;
+    background: var(--surface) !important;
+    overflow: hidden;
+}
+[data-testid="stExpander"] summary { color: var(--text) !important; font-weight: 600; }
 
-/* Divider */
-hr{border-color:var(--border)!important;opacity:1!important;}
+/* ── Divider ── */
+hr { border-color: var(--border) !important; opacity: .6 !important; }
 
-/* Caption */
-[data-testid="stCaptionContainer"]{color:var(--muted)!important;font-family:'Space Mono',monospace!important;font-size:.68rem!important;}
+/* ── Caption ── */
+[data-testid="stCaptionContainer"] {
+    color: var(--text-muted) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: .68rem !important;
+}
 
-/* Scrollbar */
-::-webkit-scrollbar{width:4px;height:4px;}
-::-webkit-scrollbar-track{background:var(--bg);}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Animations ── */
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 8px rgba(34,211,238,.15); }
+    50% { box-shadow: 0 0 20px rgba(34,211,238,.3); }
+}
+@keyframes shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+}
+.animate-in { animation: fadeInUp .4s ease-out; }
+.glow-pulse { animation: pulse-glow 3s ease-in-out infinite; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -133,6 +292,7 @@ SESSION_ID = st.session_state["session_id"]
 STARTING_BUDGET = 100_000
 STOCKS          = [f"stock_{i}" for i in range(1, 10)]
 TOTAL_ROUNDS    = 9
+MIN_SHARES      = 5
 ADMIN_PASSWORD  = "admin123"
 
 @st.cache_resource
@@ -212,6 +372,15 @@ def has_traded_this_round(team, rnd):
             return True
     return False
 
+def has_passed_this_round(team, rnd):
+    """Return True if this team chose to PASS this round."""
+    r = sb.table("trade_log").select("*").eq("round", rnd).eq("buyer", team).eq("qty", 0).execute().data
+    return len(r) > 0
+
+def log_pass(team, rnd, stk):
+    """Record a PASS decision so the team can't change their mind."""
+    sb.table("trade_log").insert({"round": rnd, "stock": stk, "buyer": team, "seller": "PASS", "price": 0, "qty": 0}).execute()
+
 def get_round_history():
     return sb.table("round_history").select("*").order("round").execute().data
 
@@ -277,19 +446,38 @@ if not is_admin and my_team is None:
 # ══════════════════════════════════════════════════════════════════════════════
 if not is_admin and my_team is None:
     st.markdown("""
-    <div style='text-align:center;padding:4rem 0 1.5rem'>
-        <div style='font-family:Space Mono,monospace;font-size:.7rem;letter-spacing:.35em;
-                    color:#00ffaa;text-transform:uppercase;margin-bottom:.75rem;'>
+    <div class='animate-in' style='text-align:center;padding:5rem 0 2rem'>
+        <div style='display:inline-block;padding:.4rem 1.2rem;border-radius:20px;
+                    background:linear-gradient(135deg,rgba(34,211,238,.1),rgba(167,139,250,.1));
+                    border:1px solid rgba(34,211,238,.2);
+                    font-family:JetBrains Mono,monospace;font-size:.65rem;letter-spacing:.3em;
+                    color:#22d3ee;text-transform:uppercase;margin-bottom:1.5rem;'>
             HACKATHON 2025
         </div>
-        <h1 style='font-size:3.8rem;font-weight:800;letter-spacing:-.04em;margin:0;
-                   background:linear-gradient(135deg,#f1f5f9 20%,#7a90a8 100%);
-                   -webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.1;'>
+        <h1 style='font-size:4.2rem;font-weight:900;letter-spacing:-.05em;margin:0;
+                   background:linear-gradient(135deg,#f1f5f9 0%,#94a3b8 50%,#22d3ee 100%);
+                   background-size:200% auto;
+                   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+                   line-height:1.05;animation:shimmer 4s linear infinite;'>
             Market Making<br>Challenge
         </h1>
-        <p style='color:#7a90a8;margin-top:1.25rem;font-size:1rem;letter-spacing:.02em;'>
-            9 stocks &nbsp;·&nbsp; 9 rounds &nbsp;·&nbsp; tightest spread wins
-        </p>
+        <div style='display:flex;justify-content:center;gap:2rem;margin-top:2rem;'>
+            <div style='display:flex;align-items:center;gap:.5rem;'>
+                <div style='width:8px;height:8px;border-radius:50%;background:#22d3ee;
+                            box-shadow:0 0 10px rgba(34,211,238,.5);'></div>
+                <span style='color:#94a3b8;font-size:.85rem;font-weight:500;'>9 Stocks</span>
+            </div>
+            <div style='display:flex;align-items:center;gap:.5rem;'>
+                <div style='width:8px;height:8px;border-radius:50%;background:#a78bfa;
+                            box-shadow:0 0 10px rgba(167,139,250,.5);'></div>
+                <span style='color:#94a3b8;font-size:.85rem;font-weight:500;'>9 Rounds</span>
+            </div>
+            <div style='display:flex;align-items:center;gap:.5rem;'>
+                <div style='width:8px;height:8px;border-radius:50%;background:#34d399;
+                            box-shadow:0 0 10px rgba(52,211,153,.5);'></div>
+                <span style='color:#94a3b8;font-size:.85rem;font-weight:500;'>Tightest Spread Wins</span>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     _,col,_ = st.columns([1,2,1])
@@ -323,63 +511,121 @@ if not is_admin and my_team is None:
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     if is_admin:
-        st.markdown("""<div style='padding:.5rem 0 .25rem'>
-            <div style='font-size:.6rem;letter-spacing:.25em;color:#00ffaa;text-transform:uppercase;'>Role</div>
-            <div style='font-size:1.25rem;font-weight:800;color:#f1f5f9;'>🔧 Admin</div>
+        st.markdown("""<div style='padding:.75rem 0 .5rem'>
+            <div style='font-size:.6rem;letter-spacing:.25em;color:#22d3ee;text-transform:uppercase;font-weight:600;'>Role</div>
+            <div style='font-size:1.3rem;font-weight:800;color:#f1f5f9;margin-top:.2rem;'>🔧 Admin</div>
         </div>""", unsafe_allow_html=True)
         if st.button("🚪 Sign out", use_container_width=True):
             st.session_state["is_admin"]=False; st.rerun()
     else:
-        st.markdown(f"""<div style='padding:.5rem 0 .25rem'>
-            <div style='font-size:.6rem;letter-spacing:.25em;color:#00ffaa;text-transform:uppercase;'>Playing as</div>
-            <div style='font-size:1.25rem;font-weight:800;color:#f1f5f9;'>{my_team}</div>
+        st.markdown(f"""<div style='padding:.75rem 0 .5rem'>
+            <div style='font-size:.6rem;letter-spacing:.25em;color:#22d3ee;text-transform:uppercase;font-weight:600;'>Playing as</div>
+            <div style='font-size:1.3rem;font-weight:800;color:#f1f5f9;margin-top:.2rem;'>{_esc(my_team)}</div>
         </div>""", unsafe_allow_html=True)
         if teams and my_team in teams:
             cash = teams[my_team]["cash"]
-            st.markdown(f"""<div style='background:#0f1520;border:1px solid #253347;border-radius:10px;
-                padding:.75rem 1rem;margin:.5rem 0;font-family:Space Mono,monospace;'>
-                <div style='font-size:.6rem;color:#7a90a8;text-transform:uppercase;letter-spacing:.1em;'>Cash balance</div>
-                <div style='font-size:1.1rem;font-weight:700;color:{"#4ade80" if cash>=0 else "#f87171"};margin-top:.2rem;'>${cash:,.0f}</div>
+            pnl = cash - STARTING_BUDGET
+            pnl_color = "#34d399" if pnl >= 0 else "#fb7185"
+            st.markdown(f"""<div style='background:linear-gradient(135deg,#111827,#1a2332);
+                border:1px solid #2a3a50;border-radius:14px;
+                padding:1rem 1.1rem;margin:.6rem 0;'>
+                <div style='display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:.5rem;'>
+                    <div>
+                        <div style='font-size:.55rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>Cash</div>
+                        <div style='font-family:JetBrains Mono,monospace;font-size:1.15rem;font-weight:700;
+                                    color:{"#34d399" if cash>=0 else "#fb7185"};margin-top:.15rem;'>${cash:,.0f}</div>
+                    </div>
+                    <div style='text-align:right;'>
+                        <div style='font-size:.55rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>P&L</div>
+                        <div style='font-family:JetBrains Mono,monospace;font-size:.85rem;font-weight:600;
+                                    color:{pnl_color};margin-top:.15rem;'>${pnl:+,.0f}</div>
+                    </div>
+                </div>
+                <div style='height:3px;border-radius:2px;background:#1f2b3d;overflow:hidden;'>
+                    <div style='height:100%;width:{min(100, max(2, cash / STARTING_BUDGET * 50))}%;
+                                background:linear-gradient(90deg,#22d3ee,#a78bfa);border-radius:2px;'></div>
+                </div>
             </div>""", unsafe_allow_html=True)
+            # ── Portfolio positions ──
+            my_pos = [p for p in positions if p["team"] == my_team and p["qty"] != 0]
+            if my_pos:
+                st.markdown("""<div style='font-size:.55rem;color:#64748b;text-transform:uppercase;
+                    letter-spacing:.12em;font-weight:600;margin-top:.8rem;margin-bottom:.4rem;'>Open Positions</div>""", unsafe_allow_html=True)
+                for p in my_pos:
+                    qty_color = "#34d399" if p["qty"] > 0 else "#fb7185"
+                    side_label = "LONG" if p["qty"] > 0 else "SHORT"
+                    st.markdown(f"""<div style='background:#111827;border:1px solid #2a3a50;border-radius:10px;
+                        padding:.45rem .75rem;margin:.2rem 0;font-family:JetBrains Mono,monospace;font-size:.75rem;
+                        display:flex;justify-content:space-between;align-items:center;'>
+                        <div style='display:flex;align-items:center;gap:.5rem;'>
+                            <span style='color:#a78bfa;font-weight:600;'>{_esc(p["stock"].upper())}</span>
+                            <span style='font-size:.55rem;padding:.1rem .35rem;border-radius:4px;
+                                        background:{qty_color}15;color:{qty_color};font-weight:600;'>{side_label}</span>
+                        </div>
+                        <span style='color:{qty_color};font-weight:700;'>{p["qty"]:+d}</span>
+                    </div>""", unsafe_allow_html=True)
         if st.button("🚪 Leave team", use_container_width=True):
             release_team(my_team); st.session_state["claimed_team"]=None; st.rerun()
     st.markdown("---")
-    st.markdown(f"""<div style='font-family:Space Mono,monospace;font-size:.72rem;color:#7a90a8;line-height:1.8;'>
-        Round &nbsp;&nbsp;<span style='color:#f1f5f9;font-weight:700;'>{round_num} / {TOTAL_ROUNDS}</span><br>
-        Stock &nbsp;&nbsp;<span style='color:#00ffaa;font-weight:700;'>{stock.upper()}</span><br>
-        Phase &nbsp;&nbsp;<span style='color:#fbbf24;font-weight:700;'>{phase.upper()}</span>
+    st.markdown(f"""<div style='background:#111827;border:1px solid #2a3a50;border-radius:12px;
+                        padding:.8rem 1rem;font-family:JetBrains Mono,monospace;font-size:.72rem;'>
+        <div style='display:flex;justify-content:space-between;margin-bottom:.4rem;'>
+            <span style='color:#64748b;font-weight:500;'>ROUND</span>
+            <span style='color:#f1f5f9;font-weight:700;'>{round_num} / {TOTAL_ROUNDS}</span>
+        </div>
+        <div style='display:flex;justify-content:space-between;margin-bottom:.4rem;'>
+            <span style='color:#64748b;font-weight:500;'>STOCK</span>
+            <span style='color:#22d3ee;font-weight:700;'>{stock.upper()}</span>
+        </div>
+        <div style='display:flex;justify-content:space-between;'>
+            <span style='color:#64748b;font-weight:500;'>PHASE</span>
+            <span style='color:#fbbf24;font-weight:700;'>{phase.upper()}</span>
+        </div>
     </div>""", unsafe_allow_html=True)
 
 # ── Header ─────────────────────────────────────────────────────────────────────
-identity_label = "🔧 Admin" if is_admin else f"🏷 {my_team}"
+identity_label = "🔧 Admin" if is_admin else f"🏷 {_esc(my_team)}"
+phase_colors = {"submit": "#22d3ee", "trade": "#fbbf24", "reveal": "#34d399"}
+phase_color = phase_colors.get(phase, "#fbbf24")
 st.markdown(f"""
-<div style='display:flex;justify-content:space-between;align-items:center;
-            padding:.65rem 1.25rem;background:rgba(15,21,32,.95);
-            border:1px solid #253347;border-radius:12px;margin-bottom:1.75rem;
-            backdrop-filter:blur(12px);'>
-    <div style='display:flex;align-items:center;gap:1.75rem;'>
-        <span style='font-family:Space Mono,monospace;font-size:.8rem;color:#00ffaa;
-                     letter-spacing:.12em;font-weight:700;'>📈 MARKET MAKING</span>
-        <span style='color:#253347;font-size:1.2rem;'>|</span>
-        <span style='font-family:Space Mono,monospace;font-size:.75rem;color:#94a3b8;'>
-            <span style='color:#c084fc;font-weight:700;'>{stock.upper()}</span>
-            &nbsp;·&nbsp; RD {round_num}/{TOTAL_ROUNDS}
-            &nbsp;·&nbsp; <span style='color:#fbbf24;'>{phase.upper()}</span>
-        </span>
+<div class='animate-in' style='display:flex;justify-content:space-between;align-items:center;
+            padding:.6rem 1.25rem;background:linear-gradient(135deg,rgba(17,24,39,.98),rgba(26,35,50,.95));
+            border:1px solid #2a3a50;border-radius:14px;margin-bottom:1.75rem;
+            backdrop-filter:blur(16px);box-shadow:0 4px 20px rgba(0,0,0,.3);'>
+    <div style='display:flex;align-items:center;gap:1.5rem;'>
+        <span style='font-family:JetBrains Mono,monospace;font-size:.75rem;font-weight:700;
+                     background:linear-gradient(135deg,#22d3ee,#a78bfa);-webkit-background-clip:text;
+                     -webkit-text-fill-color:transparent;letter-spacing:.1em;'>📈 MARKET MAKING</span>
+        <span style='color:#2a3a50;font-size:1.1rem;'>│</span>
+        <div style='display:flex;align-items:center;gap:.75rem;'>
+            <span style='font-family:JetBrains Mono,monospace;font-size:.7rem;
+                         padding:.2rem .6rem;border-radius:6px;background:rgba(167,139,250,.1);
+                         border:1px solid rgba(167,139,250,.2);color:#a78bfa;font-weight:600;'>{stock.upper()}</span>
+            <span style='font-family:JetBrains Mono,monospace;font-size:.7rem;color:#94a3b8;'>RD {round_num}/{TOTAL_ROUNDS}</span>
+            <span style='font-family:JetBrains Mono,monospace;font-size:.65rem;
+                         padding:.15rem .5rem;border-radius:4px;
+                         background:{phase_color}18;color:{phase_color};font-weight:700;
+                         letter-spacing:.08em;'>{phase.upper()}</span>
+        </div>
     </div>
-    <span style='font-family:Space Mono,monospace;font-size:.75rem;color:#94a3b8;
-                 background:#161f2e;padding:.3rem .75rem;border-radius:20px;
-                 border:1px solid #253347;'>{identity_label}</span>
+    <span style='font-family:JetBrains Mono,monospace;font-size:.7rem;color:#94a3b8;
+                 background:#1a2332;padding:.3rem .8rem;border-radius:8px;
+                 border:1px solid #2a3a50;'>{identity_label}</span>
 </div>
 """, unsafe_allow_html=True)
 
 # ── Game over ──────────────────────────────────────────────────────────────────
 if game_over:
     st.balloons()
-    st.markdown("""<h1 style='text-align:center;font-size:3.2rem;font-weight:800;
-        background:linear-gradient(135deg,#00ffaa,#38bdf8);
-        -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:2rem;'>
-        🏁 Final Results</h1>""", unsafe_allow_html=True)
+    st.markdown("""<div class='animate-in' style='text-align:center;padding:2rem 0;'>
+        <div style='font-size:4rem;margin-bottom:.5rem;'>🏁</div>
+        <h1 style='font-size:3.2rem;font-weight:900;letter-spacing:-.04em;
+            background:linear-gradient(135deg,#22d3ee,#a78bfa,#34d399);
+            background-size:200% auto;animation:shimmer 3s linear infinite;
+            -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:.5rem;'>
+            Final Results</h1>
+        <p style='color:#64748b;font-size:.9rem;'>The game has ended. Here are the final standings.</p>
+    </div>""", unsafe_allow_html=True)
     rows=[]
     for n in teams:
         t=teams[n]["cash"]  # all settled to cash
@@ -397,10 +643,13 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ADMIN PANEL
 # ══════════════════════════════════════════════════════════════════════════════
 if is_admin:
-    st.markdown("""<div style='background:rgba(192,132,252,.05);border:1px solid rgba(192,132,252,.2);
-        border-radius:14px;padding:1rem 1.5rem .5rem;margin-bottom:1.5rem;'>
-        <div style='font-size:.65rem;letter-spacing:.25em;color:#c084fc;text-transform:uppercase;
-                    font-weight:700;margin-bottom:.75rem;'>🔧 Admin Control Panel</div>
+    st.markdown("""<div style='background:linear-gradient(135deg,rgba(167,139,250,.06),rgba(34,211,238,.03));
+        border:1px solid rgba(167,139,250,.15);border-radius:16px;padding:1.1rem 1.5rem .6rem;margin-bottom:1.5rem;
+        position:relative;overflow:hidden;'>
+        <div style='position:absolute;top:0;left:0;right:0;height:2px;
+                    background:linear-gradient(90deg,#a78bfa,#22d3ee);'></div>
+        <div style='font-size:.6rem;letter-spacing:.25em;color:#a78bfa;text-transform:uppercase;
+                    font-weight:700;margin-bottom:.5rem;'>🔧 Admin Control Panel</div>
     </div>""", unsafe_allow_html=True)
 
     tab_teams, tab_phase, tab_danger = st.tabs(["👥 Teams", "⚙️ Phase Controls", "⚠️ Reset"])
@@ -432,12 +681,21 @@ if is_admin:
             if st.button("🗑 Remove All Teams",use_container_width=True): delete_all_teams(); st.rerun()
 
     with tab_phase:
-        st.markdown(f"""<div style='background:#0f1520;border:1px solid #253347;border-radius:10px;
-            padding:.9rem 1.1rem;margin-bottom:1rem;font-family:Space Mono,monospace;font-size:.8rem;line-height:2;'>
-            Round &nbsp;<b style='color:#00ffaa;'>{round_num}</b> &nbsp;·&nbsp;
-            Stock &nbsp;<b style='color:#c084fc;'>{stock.upper()}</b> &nbsp;·&nbsp;
-            Phase &nbsp;<b style='color:#fbbf24;'>{phase.upper()}</b><br>
-            Spreads in: &nbsp;<b style='color:#f1f5f9;'>{len(spreads)} / {len(teams)}</b>
+        st.markdown(f"""<div style='background:linear-gradient(135deg,#111827,#1a2332);border:1px solid #2a3a50;border-radius:14px;
+            padding:1rem 1.2rem;margin-bottom:1rem;font-family:JetBrains Mono,monospace;font-size:.78rem;
+            position:relative;overflow:hidden;'>
+            <div style='position:absolute;top:0;left:0;right:0;height:2px;
+                        background:linear-gradient(90deg,#a78bfa,#22d3ee);opacity:.5;'></div>
+            <div style='display:flex;gap:1.5rem;flex-wrap:wrap;align-items:center;margin-top:.3rem;'>
+                <div><span style='color:#64748b;font-size:.65rem;font-weight:600;'>ROUND</span>
+                    <span style='color:#22d3ee;font-weight:700;margin-left:.4rem;'>{round_num}</span></div>
+                <div><span style='color:#64748b;font-size:.65rem;font-weight:600;'>STOCK</span>
+                    <span style='color:#a78bfa;font-weight:700;margin-left:.4rem;'>{stock.upper()}</span></div>
+                <div><span style='color:#64748b;font-size:.65rem;font-weight:600;'>PHASE</span>
+                    <span style='color:#fbbf24;font-weight:700;margin-left:.4rem;'>{phase.upper()}</span></div>
+                <div><span style='color:#64748b;font-size:.65rem;font-weight:600;'>SPREADS</span>
+                    <span style='color:#f1f5f9;font-weight:700;margin-left:.4rem;'>{len(spreads)} / {len(teams)}</span></div>
+            </div>
         </div>""", unsafe_allow_html=True)
 
         if phase == "submit":
@@ -454,10 +712,11 @@ if is_admin:
 
         elif phase == "trade":
             round_trades=get_trade_log(round_num)
+            real_trades = [t for t in round_trades if t.get("qty", 0) > 0]
             st.success(f"Market Maker: **{market_maker}**")
-            st.markdown(f"Trades executed: **{len(round_trades)}**")
-            if round_trades:
-                df_t=pd.DataFrame(round_trades)[["buyer","seller","price","qty","executed_at"]]
+            st.markdown(f"Trades executed: **{len(real_trades)}**")
+            if real_trades:
+                df_t=pd.DataFrame(real_trades)[["buyer","seller","price","qty","executed_at"]]
                 df_t.columns=["Buyer","Seller","Price","Qty","Time"]
                 df_t["Price"]=df_t["Price"].apply(lambda v:f"${v:.2f}")
                 df_t["Time"]=df_t["Time"].apply(lambda v:str(v)[-15:-7] if v else "")
@@ -502,10 +761,10 @@ if phase == "submit":
     if not is_admin:
         left,right = st.columns([1,1],gap="large")
         with left:
-            st.markdown("""<h2 style='font-size:1.9rem;font-weight:800;margin-bottom:.3rem;
-                color:#f1f5f9;'>Submit Your Spread</h2>
-                <p style='color:#7a90a8;margin-bottom:1.5rem;font-size:.92rem;'>
-                Tightest bid-ask spread = market maker this round.</p>""", unsafe_allow_html=True)
+            st.markdown("""<h2 style='font-size:1.8rem;font-weight:800;margin-bottom:.2rem;
+                color:#f1f5f9;letter-spacing:-.03em;'>Submit Your Spread</h2>
+                <p style='color:#64748b;margin-bottom:1.5rem;font-size:.88rem;'>
+                The team with the tightest bid-ask spread becomes market maker.</p>""", unsafe_allow_html=True)
             existing=spreads.get(my_team,{})
             already=my_team in spreads
             bid_val=st.number_input("📉 Bid — your buy price ($)", min_value=0.0,
@@ -516,12 +775,15 @@ if phase == "submit":
                 st.error("Ask must be greater than bid.")
             else:
                 spread_w=ask_val-bid_val
-                st.markdown(f"""<div style='background:rgba(0,255,170,.06);
-                    border:1px solid rgba(0,255,170,.25);border-radius:10px;
-                    padding:.8rem 1rem;margin:.6rem 0;font-family:Space Mono,monospace;'>
-                    <span style='color:#7a90a8;font-size:.75rem;'>SPREAD WIDTH</span><br>
-                    <span style='color:#00ffaa;font-size:1.2rem;font-weight:700;'>${spread_w:.2f}</span>
-                    {"&nbsp;&nbsp;<span style='color:#fbbf24;font-size:.75rem;'>✅ SUBMITTED — resubmit to update</span>" if already else ""}
+                st.markdown(f"""<div style='background:linear-gradient(135deg,rgba(34,211,238,.06),rgba(52,211,153,.04));
+                    border:1px solid rgba(34,211,238,.2);border-radius:14px;
+                    padding:.9rem 1.1rem;margin:.6rem 0;font-family:JetBrains Mono,monospace;
+                    position:relative;overflow:hidden;'>
+                    <div style='position:absolute;top:0;left:0;right:0;height:2px;
+                                background:linear-gradient(90deg,#22d3ee,#34d399);opacity:.5;'></div>
+                    <span style='color:#64748b;font-size:.7rem;font-weight:600;letter-spacing:.1em;'>SPREAD WIDTH</span><br>
+                    <span style='color:#22d3ee;font-size:1.3rem;font-weight:700;'>${spread_w:.2f}</span>
+                    {"&nbsp;&nbsp;<span style='color:#fbbf24;font-size:.7rem;font-weight:600;'>✓ SUBMITTED — resubmit to update</span>" if already else ""}
                 </div>""", unsafe_allow_html=True)
                 if st.button("🔒 Lock In Spread", type="primary", use_container_width=True):
                     upsert_spread(round_num,my_team,bid_val,ask_val)
@@ -550,24 +812,32 @@ elif phase == "trade":
 
     # MM hero card
     st.markdown(f"""
-    <div style='background:linear-gradient(135deg,rgba(192,132,252,.1),rgba(56,189,248,.07));
-                border:1px solid rgba(192,132,252,.3);border-radius:16px;
-                padding:1.4rem 1.75rem;margin-bottom:1.75rem;'>
-        <div style='font-size:.65rem;letter-spacing:.25em;color:#c084fc;text-transform:uppercase;
-                    font-weight:700;margin-bottom:.6rem;'>🏦 Market Maker This Round</div>
-        <div style='font-size:2.1rem;font-weight:800;color:#f1f5f9;margin-bottom:.9rem;'>{market_maker}</div>
-        <div style='display:flex;gap:2.5rem;'>
-            <div>
-                <div style='font-size:.65rem;color:#7a90a8;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.2rem;'>BID (sells to MM)</div>
-                <div style='font-family:Space Mono,monospace;font-size:1.4rem;font-weight:700;color:#4ade80;'>${mm_bid:.2f}</div>
+    <div class='animate-in' style='background:linear-gradient(135deg,rgba(167,139,250,.08),rgba(34,211,238,.04));
+                border:1px solid rgba(167,139,250,.2);border-radius:20px;
+                padding:1.6rem 2rem;margin-bottom:1.75rem;position:relative;overflow:hidden;
+                box-shadow:0 8px 32px rgba(0,0,0,.2);'>
+        <div style='position:absolute;top:0;left:0;right:0;height:2px;
+                    background:linear-gradient(90deg,#a78bfa,#22d3ee);'></div>
+        <div style='position:absolute;top:1rem;right:1.5rem;font-size:2.5rem;opacity:.12;'>🏦</div>
+        <div style='font-size:.6rem;letter-spacing:.3em;color:#a78bfa;text-transform:uppercase;
+                    font-weight:700;margin-bottom:.75rem;'>Market Maker This Round</div>
+        <div style='font-size:2rem;font-weight:800;color:#f1f5f9;margin-bottom:1.1rem;
+                    letter-spacing:-.02em;'>{_esc(market_maker)}</div>
+        <div style='display:flex;gap:1.5rem;flex-wrap:wrap;'>
+            <div style='background:rgba(52,211,153,.06);border:1px solid rgba(52,211,153,.15);
+                        border-radius:12px;padding:.65rem 1rem;min-width:100px;'>
+                <div style='font-size:.55rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>BID</div>
+                <div style='font-family:JetBrains Mono,monospace;font-size:1.3rem;font-weight:700;color:#34d399;margin-top:.15rem;'>${mm_bid:.2f}</div>
             </div>
-            <div>
-                <div style='font-size:.65rem;color:#7a90a8;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.2rem;'>ASK (buys from MM)</div>
-                <div style='font-family:Space Mono,monospace;font-size:1.4rem;font-weight:700;color:#38bdf8;'>${mm_ask:.2f}</div>
+            <div style='background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.15);
+                        border-radius:12px;padding:.65rem 1rem;min-width:100px;'>
+                <div style='font-size:.55rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>ASK</div>
+                <div style='font-family:JetBrains Mono,monospace;font-size:1.3rem;font-weight:700;color:#22d3ee;margin-top:.15rem;'>${mm_ask:.2f}</div>
             </div>
-            <div>
-                <div style='font-size:.65rem;color:#7a90a8;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.2rem;'>SPREAD</div>
-                <div style='font-family:Space Mono,monospace;font-size:1.4rem;font-weight:700;color:#fbbf24;'>${mm_ask-mm_bid:.2f}</div>
+            <div style='background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);
+                        border-radius:12px;padding:.65rem 1rem;min-width:100px;'>
+                <div style='font-size:.55rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>SPREAD</div>
+                <div style='font-family:JetBrains Mono,monospace;font-size:1.3rem;font-weight:700;color:#fbbf24;margin-top:.15rem;'>${mm_ask-mm_bid:.2f}</div>
             </div>
         </div>
     </div>
@@ -577,99 +847,151 @@ elif phase == "trade":
         left,right=st.columns([1,1],gap="large")
         with left:
             if is_mm:
-                st.markdown("""<div style='background:rgba(192,132,252,.08);
-                    border:1px solid rgba(192,132,252,.25);border-radius:14px;
-                    padding:1.5rem;text-align:center;'>
-                    <div style='font-size:2.5rem;margin-bottom:.75rem;'>🏦</div>
-                    <div style='font-weight:800;font-size:1.2rem;color:#c084fc;'>You are the Market Maker</div>
-                    <div style='color:#7a90a8;font-size:.88rem;margin-top:.6rem;line-height:1.6;'>
+                st.markdown("""<div style='background:linear-gradient(135deg,rgba(167,139,250,.08),rgba(34,211,238,.04));
+                    border:1px solid rgba(167,139,250,.2);border-radius:18px;
+                    padding:2rem;text-align:center;position:relative;overflow:hidden;'>
+                    <div style='position:absolute;top:0;left:0;right:0;height:2px;
+                                background:linear-gradient(90deg,#a78bfa,#22d3ee);'></div>
+                    <div style='font-size:3rem;margin-bottom:.75rem;filter:drop-shadow(0 0 12px rgba(167,139,250,.3));'>🏦</div>
+                    <div style='font-weight:800;font-size:1.25rem;color:#a78bfa;margin-bottom:.5rem;'>You are the Market Maker</div>
+                    <div style='color:#64748b;font-size:.85rem;line-height:1.7;max-width:320px;margin:0 auto;'>
                         You must fill every trade placed against you.<br>
                         You can go negative. Positions settle at true price.
                     </div>
                 </div>""", unsafe_allow_html=True)
             else:
-                # Check if already traded
+                # Check if already traded or passed
                 already_traded = has_traded_this_round(my_team, round_num)
+                already_passed = has_passed_this_round(my_team, round_num)
                 my_cash = teams[my_team]["cash"]
 
-                st.markdown(f"""<h3 style='font-weight:800;font-size:1.3rem;margin-bottom:1rem;
-                    color:#f1f5f9;'>Your Trade Decision</h3>""", unsafe_allow_html=True)
+                st.markdown(f"""<h3 style='font-weight:800;font-size:1.25rem;margin-bottom:.25rem;
+                    color:#f1f5f9;letter-spacing:-.02em;'>Your Trade Decision</h3>
+                    <p style='color:#64748b;font-size:.78rem;margin-bottom:1rem;'>Min {MIN_SHARES} shares per trade</p>""", unsafe_allow_html=True)
 
-                if already_traded:
-                    st.warning("✅ You've already placed your trade this round. Wait for the reveal.")
+                if already_traded or already_passed:
+                    if already_passed:
+                        st.info("⏭ You passed this round. Wait for the reveal.")
+                    else:
+                        st.warning("✅ You've already placed your trade this round. Wait for the reveal.")
                 else:
-                    action=st.radio("Direction",["🟢 BUY shares (at ask)","🔴 SELL shares (at bid)"],horizontal=True)
+                    action=st.radio("Direction",["🟢 BUY shares (at ask)","🔴 SELL shares (at bid)","⏭ PASS (no trade)"],horizontal=True)
+                    is_pass="PASS" in action
                     is_buy="BUY" in action
-                    price=mm_ask if is_buy else mm_bid
-                    max_qty=int(my_cash//price) if is_buy else 999
-                    qty=st.number_input("Number of shares",min_value=1,max_value=max(1,max_qty),value=1,step=1)
-                    total_cost=price*qty
-                    cash_after=my_cash-total_cost if is_buy else my_cash+total_cost
 
-                    st.markdown(f"""
-                    <div style='background:#0f1520;border:1px solid #253347;border-radius:12px;
-                                padding:1.1rem 1.25rem;margin:1rem 0;font-family:Space Mono,monospace;'>
-                        <div style='display:grid;grid-template-columns:1fr 1fr;gap:.6rem;'>
-                            <div>
-                                <div style='font-size:.65rem;color:#7a90a8;text-transform:uppercase;letter-spacing:.1em;'>Price per share</div>
-                                <div style='font-size:1rem;color:#f1f5f9;font-weight:700;margin-top:.2rem;'>${price:.2f}</div>
+                    if is_pass:
+                        st.markdown("""<div style='background:linear-gradient(135deg,rgba(100,116,139,.06),rgba(148,163,184,.04));
+                            border:1px solid rgba(100,116,139,.2);border-radius:14px;
+                            padding:1rem 1.2rem;margin:.6rem 0;'>
+                            <div style='display:flex;align-items:center;gap:.6rem;'>
+                                <span style='font-size:1.3rem;'>⏭</span>
+                                <span style='color:#94a3b8;font-size:.85rem;font-weight:500;'>You will sit out this round — no position taken.</span>
                             </div>
-                            <div>
-                                <div style='font-size:.65rem;color:#7a90a8;text-transform:uppercase;letter-spacing:.1em;'>Shares</div>
-                                <div style='font-size:1rem;color:#f1f5f9;font-weight:700;margin-top:.2rem;'>{qty:,}</div>
-                            </div>
-                            <div>
-                                <div style='font-size:.65rem;color:#7a90a8;text-transform:uppercase;letter-spacing:.1em;'>Total {"cost" if is_buy else "proceeds"}</div>
-                                <div style='font-size:1.1rem;color:{"#f87171" if is_buy else "#4ade80"};font-weight:700;margin-top:.2rem;'>${total_cost:,.0f}</div>
-                            </div>
-                            <div>
-                                <div style='font-size:.65rem;color:#7a90a8;text-transform:uppercase;letter-spacing:.1em;'>Cash after trade</div>
-                                <div style='font-size:1.1rem;color:{"#4ade80" if cash_after>=0 else "#f87171"};font-weight:700;margin-top:.2rem;'>${cash_after:,.0f}</div>
+                        </div>""", unsafe_allow_html=True)
+                        if st.button("⏭ Confirm PASS", type="primary", use_container_width=True):
+                            log_pass(my_team, round_num, stock)
+                            st.info("Passed this round."); st.rerun()
+                    else:
+                        price=mm_ask if is_buy else mm_bid
+                        # Fix: compute sensible max_qty for sells based on affordable short exposure
+                        if is_buy:
+                            max_qty = int(my_cash // price) if price > 0 else 1
+                        else:
+                            max_qty = int(my_cash // price) if price > 0 else 1
+                        max_qty = max(MIN_SHARES, max_qty)
+                        qty=st.number_input("Number of shares",min_value=MIN_SHARES,max_value=max_qty,value=MIN_SHARES,step=1)
+                        total_cost=price*qty
+                        cash_after=my_cash-total_cost if is_buy else my_cash+total_cost
+
+                        st.markdown(f"""
+                        <div style='background:linear-gradient(135deg,#111827,#1a2332);
+                                    border:1px solid #2a3a50;border-radius:16px;
+                                    padding:1.2rem 1.4rem;margin:1rem 0;font-family:JetBrains Mono,monospace;
+                                    position:relative;overflow:hidden;'>
+                            <div style='position:absolute;top:0;left:0;right:0;height:2px;
+                                        background:{"linear-gradient(90deg,#fb7185,#f43f5e)" if is_buy else "linear-gradient(90deg,#34d399,#22d3ee)"};'></div>
+                            <div style='display:grid;grid-template-columns:1fr 1fr;gap:.75rem;'>
+                                <div>
+                                    <div style='font-size:.6rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>Price / Share</div>
+                                    <div style='font-size:1.05rem;color:#f1f5f9;font-weight:700;margin-top:.2rem;'>${price:.2f}</div>
+                                </div>
+                                <div>
+                                    <div style='font-size:.6rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>Shares</div>
+                                    <div style='font-size:1.05rem;color:#f1f5f9;font-weight:700;margin-top:.2rem;'>{qty:,}</div>
+                                </div>
+                                <div>
+                                    <div style='font-size:.6rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>Total {"Cost" if is_buy else "Proceeds"}</div>
+                                    <div style='font-size:1.15rem;color:{"#fb7185" if is_buy else "#34d399"};font-weight:700;margin-top:.2rem;'>${total_cost:,.0f}</div>
+                                </div>
+                                <div>
+                                    <div style='font-size:.6rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>Cash After</div>
+                                    <div style='font-size:1.15rem;color:{"#34d399" if cash_after>=0 else "#fb7185"};font-weight:700;margin-top:.2rem;'>${cash_after:,.0f}</div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
 
-                    if is_buy and my_cash < total_cost:
-                        st.error(f"Insufficient funds. You have ${my_cash:,.0f}")
-                    else:
-                        btn_col1, btn_col2 = st.columns([3,1])
-                        with btn_col1:
-                            if st.button(
-                                f"{'🟢 BUY' if is_buy else '🔴 SELL'} {qty} shares @ ${price:.2f} = ${total_cost:,.0f}",
-                                type="primary", use_container_width=True
-                            ):
-                                if is_buy:
-                                    execute_trade(my_team,market_maker,stock,price,qty,round_num)
-                                    st.success(f"Bought {qty} shares @ ${price:.2f} | Total: ${total_cost:,.0f}")
-                                else:
-                                    execute_trade(market_maker,my_team,stock,price,qty,round_num)
-                                    st.success(f"Sold {qty} shares @ ${price:.2f} | Proceeds: ${total_cost:,.0f}")
-                                st.rerun()
+                        if is_buy and my_cash < total_cost:
+                            st.error(f"Insufficient funds. You have ${my_cash:,.0f}")
+                        else:
+                            # Two-step confirmation
+                            confirm_key = f"confirm_trade_{round_num}"
+                            if confirm_key not in st.session_state:
+                                st.session_state[confirm_key] = False
+
+                            if not st.session_state[confirm_key]:
+                                if st.button(
+                                    f"{'🟢 BUY' if is_buy else '🔴 SELL'} {qty} shares @ ${price:.2f} = ${total_cost:,.0f}",
+                                    type="primary", use_container_width=True
+                                ):
+                                    st.session_state[confirm_key] = {"is_buy": is_buy, "qty": qty, "price": price, "total": total_cost}
+                                    st.rerun()
+                            else:
+                                pending = st.session_state[confirm_key]
+                                st.warning(f"⚠️ Confirm: {'BUY' if pending['is_buy'] else 'SELL'} {pending['qty']} shares @ ${pending['price']:.2f} for ${pending['total']:,.0f}?")
+                                col_yes, col_no = st.columns(2)
+                                with col_yes:
+                                    if st.button("✅ Confirm", type="primary", use_container_width=True):
+                                        if pending["is_buy"]:
+                                            execute_trade(my_team,market_maker,stock,pending["price"],pending["qty"],round_num)
+                                        else:
+                                            execute_trade(market_maker,my_team,stock,pending["price"],pending["qty"],round_num)
+                                        st.session_state[confirm_key] = False
+                                        st.rerun()
+                                with col_no:
+                                    if st.button("❌ Cancel", use_container_width=True):
+                                        st.session_state[confirm_key] = False
+                                        st.rerun()
 
         with right:
             round_trades=get_trade_log(round_num)
-            st.markdown(f"""<h3 style='font-weight:800;font-size:1.1rem;margin-bottom:1rem;color:#f1f5f9;'>
-                Trades This Round
-                <span style='font-family:Space Mono,monospace;font-size:.8rem;color:#7a90a8;
-                             font-weight:400;margin-left:.5rem;'>({len(round_trades)})</span>
-            </h3>""", unsafe_allow_html=True)
-            if round_trades:
-                df_t=pd.DataFrame(round_trades)[["buyer","seller","price","qty","executed_at"]]
+            # Filter out PASS entries for display
+            real_trades = [t for t in round_trades if t.get("qty", 0) > 0]
+            st.markdown(f"""<div style='display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;'>
+                <h3 style='font-weight:800;font-size:1.05rem;color:#f1f5f9;margin:0;letter-spacing:-.02em;'>Trades This Round</h3>
+                <span style='font-family:JetBrains Mono,monospace;font-size:.7rem;color:#64748b;
+                             background:#111827;padding:.15rem .5rem;border-radius:6px;
+                             border:1px solid #2a3a50;font-weight:600;'>{len(real_trades)}</span>
+            </div>""", unsafe_allow_html=True)
+            if real_trades:
+                df_t=pd.DataFrame(real_trades)[["buyer","seller","price","qty","executed_at"]]
                 df_t.columns=["Buyer","Seller","Price","Qty","Time"]
                 df_t["Price"]=df_t["Price"].apply(lambda v:f"${v:.2f}")
                 df_t["Time"]=df_t["Time"].apply(lambda v:str(v)[-15:-7] if v else "")
                 st.dataframe(df_t,use_container_width=True,hide_index=True)
             else:
-                st.markdown("<p style='color:#7a90a8;font-size:.9rem;'>No trades yet this round.</p>", unsafe_allow_html=True)
+                st.markdown("<p style='color:#64748b;font-size:.85rem;'>No trades yet this round.</p>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # REVEAL PHASE
 # ══════════════════════════════════════════════════════════════════════════════
 elif phase == "reveal":
     true_price=true_prices.get(stock)
-    st.markdown(f"""<h2 style='font-size:1.9rem;font-weight:800;margin-bottom:1.5rem;color:#f1f5f9;'>
-        🎯 Round {round_num} Results — {stock.upper()}</h2>""", unsafe_allow_html=True)
+    st.markdown(f"""<div class='animate-in' style='margin-bottom:1.5rem;'>
+        <h2 style='font-size:1.8rem;font-weight:800;color:#f1f5f9;letter-spacing:-.03em;margin-bottom:.3rem;'>
+            🎯 Round {round_num} Results</h2>
+        <p style='color:#64748b;font-size:.85rem;'>{stock.upper()} — all positions settled at true price</p>
+    </div>""", unsafe_allow_html=True)
     c1,c2,c3=st.columns(3)
     c1.metric("True Price",f"${true_price:.2f}" if true_price else "?")
     c2.metric("Market Maker",market_maker or "—")
@@ -692,20 +1014,19 @@ elif phase == "reveal":
 # LEADERBOARD
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown("<br>", unsafe_allow_html=True)
-st.markdown("""<div style='display:flex;align-items:center;gap:.9rem;margin-bottom:1.1rem;'>
-    <span style='font-size:1.5rem;font-weight:800;color:#f1f5f9;'>🏆 Live Leaderboard</span>
-    <span style='display:inline-flex;align-items:center;gap:.4rem;background:#0f1520;
-                 border:1px solid #253347;border-radius:20px;padding:.2rem .65rem;
-                 font-family:Space Mono,monospace;font-size:.65rem;color:#7a90a8;'>
-        <span style='width:6px;height:6px;border-radius:50%;background:#00ffaa;
-                     display:inline-block;box-shadow:0 0 8px #00ffaa;'></span>LIVE
+st.markdown("""<div style='display:flex;align-items:center;gap:1rem;margin-bottom:1.2rem;'>
+    <span style='font-size:1.4rem;font-weight:800;color:#f1f5f9;letter-spacing:-.02em;'>🏆 Live Leaderboard</span>
+    <span class='glow-pulse' style='display:inline-flex;align-items:center;gap:.4rem;background:#111827;
+                 border:1px solid #2a3a50;border-radius:20px;padding:.2rem .7rem;
+                 font-family:JetBrains Mono,monospace;font-size:.6rem;color:#64748b;font-weight:600;'>
+        <span style='width:6px;height:6px;border-radius:50%;background:#22d3ee;
+                     display:inline-block;box-shadow:0 0 8px #22d3ee;'></span>LIVE
     </span>
 </div>""", unsafe_allow_html=True)
 
 if teams:
     rows=[]
     for name in teams:
-        # After settle, all P&L is in cash
         cash=teams[name]["cash"]
         pnl=cash-STARTING_BUDGET
         rows.append({
@@ -714,15 +1035,42 @@ if teams:
             "Cash":      f"${cash:,.0f}",
             "P&L":       f"${pnl:+,.0f}",
             "You":       "👈" if name==my_team else "",
+            "_sort_cash": cash,
         })
-    lb=sorted(rows,key=lambda r:float(r["Cash"].replace("$","").replace(",","")),reverse=True)
-    lb_df=pd.DataFrame(lb).reset_index(drop=True); lb_df.index+=1
+    lb=sorted(rows,key=lambda r:r["_sort_cash"],reverse=True)
+    lb_df=pd.DataFrame(lb).drop(columns=["_sort_cash"]).reset_index(drop=True); lb_df.index+=1
     st.dataframe(lb_df,use_container_width=True)
 
     history=get_round_history()
     if history:
+        # ── P&L chart over rounds ──
+        hist_df = pd.DataFrame(history)
+        if "round" in hist_df.columns and len(hist_df) > 0:
+            chart_data = {"Round": [0], **{n: [0] for n in teams}}
+            # Reconstruct running P&L from trade log per round
+            all_trades_data = get_trade_log()
+            cumulative = {n: 0.0 for n in teams}
+            for h in history:
+                rnd_num = h["round"]
+                rnd_tp  = h.get("true_price", 0) or 0
+                # Tally cash changes from trades in this round
+                for t in all_trades_data:
+                    if t["round"] == rnd_num and t["qty"] > 0:
+                        cost = t["price"] * t["qty"]
+                        cumulative[t["buyer"]]  -= cost
+                        cumulative[t["seller"]] += cost
+                        # Settlement at true price
+                        cumulative[t["buyer"]]  += t["qty"] * rnd_tp
+                        cumulative[t["seller"]] -= t["qty"] * rnd_tp
+                chart_data["Round"].append(rnd_num)
+                for n in teams:
+                    chart_data[n].append(round(cumulative[n], 2))
+            chart_df = pd.DataFrame(chart_data).set_index("Round")
+            with st.expander("📈 P&L Over Rounds", expanded=True):
+                st.line_chart(chart_df, use_container_width=True)
+
         with st.expander("📋 Round History"):
-            st.dataframe(pd.DataFrame(history),use_container_width=True,hide_index=True)
+            st.dataframe(hist_df,use_container_width=True,hide_index=True)
     all_trades=get_trade_log()
     if all_trades:
         with st.expander("📜 Full Trade Log"):
@@ -734,5 +1082,17 @@ else:
     st.info("No teams registered yet.")
 
 if phase in ("submit","trade") and not game_over:
-    st.caption("⟳ Auto-refreshing every 6s")
-    import time; time.sleep(6); st.rerun()
+    st.markdown("""
+    <div style='text-align:center;margin-top:1.5rem;padding:.6rem;'>
+        <div style='display:inline-flex;align-items:center;gap:.5rem;
+                    background:#111827;border:1px solid #2a3a50;border-radius:20px;
+                    padding:.3rem .9rem;'>
+            <span style='width:5px;height:5px;border-radius:50%;background:#22d3ee;
+                         display:inline-block;animation:pulse-glow 2s ease-in-out infinite;'></span>
+            <span style='font-family:JetBrains Mono,monospace;font-size:.6rem;color:#64748b;font-weight:500;'>
+                Auto-refreshing every 8s
+            </span>
+        </div>
+    </div>
+    <meta http-equiv="refresh" content="8">
+    """, unsafe_allow_html=True)
