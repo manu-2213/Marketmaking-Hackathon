@@ -1,10 +1,18 @@
 import streamlit as st
 import pandas as pd
+import uuid
 from supabase import create_client, Client
-from datetime import datetime
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Stock Prediction Market", layout="wide", page_icon="📈")
+
+# ── Session identity — each browser tab gets a unique persistent ID ────────────
+if "session_id" not in st.session_state:
+    st.session_state["session_id"] = str(uuid.uuid4())
+SESSION_ID = st.session_state["session_id"]
+
+if "claimed_team" not in st.session_state:
+    st.session_state["claimed_team"] = None
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 STARTING_BUDGET = 100_000
@@ -37,7 +45,26 @@ def add_team(name):
     sb.table("teams").insert({"name": name, "cash": STARTING_BUDGET}).execute()
 
 def delete_all_teams():
+    sb.table("team_sessions").delete().neq("team", "").execute()
     sb.table("teams").delete().neq("name", "").execute()
+
+def get_sessions():
+    r = sb.table("team_sessions").select("*").execute()
+    return {row["team"]: row["session_id"] for row in r.data}
+
+def claim_team(team, session_id):
+    """Try to claim a team. Returns True if successful, False if already taken."""
+    existing = sb.table("team_sessions").select("*").eq("team", team).execute()
+    if existing.data:
+        # Already claimed — only allow if same session
+        return existing.data[0]["session_id"] == session_id
+    sb.table("team_sessions").insert({
+        "team": team, "session_id": session_id
+    }).execute()
+    return True
+
+def release_team(team):
+    sb.table("team_sessions").delete().eq("team", team).execute()
 
 def get_positions(team=None):
     q = sb.table("positions").select("*")
@@ -108,6 +135,7 @@ def reset_game():
     sb.table("spreads").delete().neq("id", 0).execute()
     sb.table("true_prices").delete().neq("stock", "").execute()
     sb.table("positions").delete().neq("id", 0).execute()
+    sb.table("team_sessions").delete().neq("team", "").execute()
     sb.table("teams").delete().neq("name", "").execute()
     sb.table("game_state").update({
         "round": 1, "phase": "submit",
@@ -149,9 +177,48 @@ game_over    = gs["game_over"]
 stock        = STOCKS[round_num - 1]
 
 teams       = get_teams()
+sessions    = get_sessions()
 spreads     = get_spreads(round_num)
 true_prices = get_true_prices()
 positions   = get_positions()
+
+# ── Resolve which team this browser owns ──────────────────────────────────────
+# Check if this session already owns a team in DB
+my_team = st.session_state["claimed_team"]
+if my_team is None:
+    for team, sid in sessions.items():
+        if sid == SESSION_ID:
+            my_team = team
+            st.session_state["claimed_team"] = team
+            break
+
+# ── Team login gate ────────────────────────────────────────────────────────────
+if my_team is None:
+    st.title("📈 Stock Prediction Market")
+    st.header("Select your team to join")
+
+    claimed_teams = set(sessions.keys())
+    available     = [t for t in sorted(teams.keys()) if t not in claimed_teams]
+
+    if not teams:
+        st.warning("No teams registered yet. Ask the organiser to add teams.")
+        st.stop()
+
+    if not available:
+        st.warning("All teams are currently claimed. Ask the organiser if there's an issue.")
+        st.stop()
+
+    chosen = st.selectbox("Choose your team", available)
+    if st.button("Join as this team", type="primary"):
+        success = claim_team(chosen, SESSION_ID)
+        if success:
+            st.session_state["claimed_team"] = chosen
+            st.rerun()
+        else:
+            st.error("That team was just claimed by someone else. Please choose another.")
+    st.stop()
+
+# ── Past this point the user has a claimed team ────────────────────────────────
 
 # ── Sidebar — admin ────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -177,9 +244,22 @@ with st.sidebar:
 
         if teams:
             st.write("**Registered:**", ", ".join(sorted(teams.keys())))
+            # Show claim status
+            for t in sorted(teams.keys()):
+                status = "🔒 claimed" if t in sessions else "⬜ unclaimed"
+                st.caption(f"{t}: {status}")
             if st.button("🗑 Remove all teams", type="secondary"):
                 delete_all_teams()
                 st.rerun()
+            # Admin can release a specific team if needed
+            st.divider()
+            st.subheader("Release a team slot")
+            if sessions:
+                to_release = st.selectbox("Team to release", sorted(sessions.keys()))
+                if st.button("Release"):
+                    release_team(to_release)
+                    st.success(f"Released {to_release}")
+                    st.rerun()
 
         st.divider()
         st.subheader(f"Round {round_num} — {stock.upper()}")
@@ -221,6 +301,7 @@ with st.sidebar:
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 st.title("📈 Stock Prediction Market")
+st.caption(f"Logged in as: **{my_team}**")
 
 if game_over:
     st.balloons()
@@ -246,28 +327,25 @@ if phase == "submit":
 
     col_form, col_submitted = st.columns([1, 1])
     with col_form:
-        if teams:
-            team_sel = st.selectbox("Your team", sorted(teams.keys()))
-            existing = spreads.get(team_sel, {})
-            bid_val  = st.number_input("Bid ($)", min_value=0.0,
-                                       value=float(existing.get("bid", 95.0)), step=0.01)
-            ask_val  = st.number_input("Ask ($)", min_value=0.0,
-                                       value=float(existing.get("ask", 105.0)), step=0.01)
-            if bid_val >= ask_val:
-                st.error("Ask must be greater than bid")
-            elif st.button("Submit spread", type="primary"):
-                upsert_spread(round_num, team_sel, bid_val, ask_val)
-                st.success(f"Spread submitted for {team_sel}!")
-                st.rerun()
-        else:
-            st.warning("No teams registered yet.")
+        existing = spreads.get(my_team, {})
+        bid_val  = st.number_input("Bid ($)", min_value=0.0,
+                                   value=float(existing.get("bid", 95.0)), step=0.01)
+        ask_val  = st.number_input("Ask ($)", min_value=0.0,
+                                   value=float(existing.get("ask", 105.0)), step=0.01)
+        if bid_val >= ask_val:
+            st.error("Ask must be greater than bid")
+        elif st.button("Submit spread", type="primary"):
+            upsert_spread(round_num, my_team, bid_val, ask_val)
+            st.success("Spread submitted!")
+            st.rerun()
 
     with col_submitted:
         st.subheader("Submitted so far")
         if spreads:
             rows = [{"Team": t, "Bid": f"${s['bid']:.2f}",
                      "Ask": f"${s['ask']:.2f}",
-                     "Spread": f"${s['ask']-s['bid']:.2f}"}
+                     "Spread": f"${s['ask']-s['bid']:.2f}",
+                     "You": "👈" if t == my_team else ""}
                     for t, s in spreads.items()]
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
             st.caption(f"{len(spreads)} / {len(teams)} teams submitted")
@@ -284,34 +362,34 @@ elif phase == "trade":
     c2.metric("Best Bid", f"${mm_spread.get('bid', 0):.2f}")
     c3.metric("Best Ask", f"${mm_spread.get('ask', 0):.2f}")
 
+    if my_team == market_maker:
+        st.warning("🏦 You are the market maker this round. You must fill every trade.")
+    else:
+        st.divider()
+        st.subheader("Your trade")
+        action = st.selectbox("Action", ["BUY (at ask)", "SELL (at bid)"])
+        price  = mm_spread.get("ask" if action.startswith("BUY") else "bid", 100)
+        st.write(f"Trade price: **${price:.2f}**")
+        cash_after = teams[my_team]["cash"] - (price if action.startswith("BUY") else 0)
+        if action.startswith("BUY") and cash_after < 0:
+            st.error(f"Insufficient funds. You have ${teams[my_team]['cash']:,.0f}")
+        elif st.button("⚡ Submit trade decision", type="primary"):
+            if action.startswith("BUY"):
+                execute_trade(my_team, market_maker, stock, price, round_num)
+                st.success(f"Bought 1 {stock} from {market_maker} @ ${price:.2f}")
+            else:
+                execute_trade(market_maker, my_team, stock, price, round_num)
+                st.success(f"Sold 1 {stock} to {market_maker} @ ${price:.2f}")
+            st.rerun()
+
     st.divider()
+    st.subheader("All spreads this round")
     rows = [{"Team": t, "Bid": f"${s['bid']:.2f}", "Ask": f"${s['ask']:.2f}",
              "Spread": f"${s['ask']-s['bid']:.2f}",
-             "Market Maker": "✅" if t == market_maker else ""}
+             "Market Maker": "✅" if t == market_maker else "",
+             "You": "👈" if t == my_team else ""}
             for t, s in spreads.items()]
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
-    st.divider()
-    st.subheader("Execute a trade")
-    non_mm = [t for t in teams if t != market_maker]
-    if non_mm:
-        c1, c2 = st.columns(2)
-        with c1:
-            trading_team = st.selectbox("Team", sorted(non_mm))
-        with c2:
-            action = st.selectbox("Action", ["BUY (at ask)", "SELL (at bid)"])
-
-        price = mm_spread.get("ask" if action.startswith("BUY") else "bid", 100)
-        st.write(f"Trade price: **${price:.2f}**")
-
-        if st.button("⚡ Execute trade", type="primary"):
-            if action.startswith("BUY"):
-                execute_trade(trading_team, market_maker, stock, price, round_num)
-                st.success(f"{trading_team} bought 1 {stock} from {market_maker} @ ${price:.2f}")
-            else:
-                execute_trade(market_maker, trading_team, stock, price, round_num)
-                st.success(f"{trading_team} sold 1 {stock} to {market_maker} @ ${price:.2f}")
-            st.rerun()
 
     round_trades = get_trade_log(round_num)
     if round_trades:
@@ -336,6 +414,7 @@ elif phase == "reveal":
             "Ask":    f"${s['ask']:.2f}", "Spread": f"${s['ask']-s['bid']:.2f}",
             "Contains true price": "✅" if inside else ("❌" if inside is False else "?"),
             "Market Maker": "🏦" if t == market_maker else "",
+            "You": "👈" if t == my_team else "",
         })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
@@ -355,6 +434,7 @@ if teams:
             "Unrealised P&L":  f"${unreal:+,.0f}",
             "Total Portfolio": f"${total:,.0f}",
             "vs Start":        f"${total - STARTING_BUDGET:+,.0f}",
+            "You":             "👈" if name == my_team else "",
         })
     lb = sorted(rows, key=lambda r: float(r["Total Portfolio"].replace("$","").replace(",","")), reverse=True)
     lb_df = pd.DataFrame(lb).reset_index(drop=True)
@@ -370,8 +450,6 @@ if teams:
     if all_trades:
         with st.expander("📜 Full trade log"):
             st.dataframe(pd.DataFrame(all_trades), use_container_width=True, hide_index=True)
-else:
-    st.info("No teams registered yet.")
 
 # Auto-refresh every 3s during active phases
 if phase in ("submit", "trade") and not game_over:
