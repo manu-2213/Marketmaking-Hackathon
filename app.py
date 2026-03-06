@@ -655,34 +655,39 @@ if is_admin:
     tab_teams, tab_phase, tab_danger = st.tabs(["👥 Teams", "⚙️ Phase Controls", "⚠️ Reset"])
 
     with tab_teams:
-        c1,c2 = st.columns([1,2])
-        with c1:
-            with st.form("add_team_form", clear_on_submit=True):
-                new_team = st.text_input("", placeholder="Team name…", label_visibility="collapsed")
-                submitted = st.form_submit_button("➕ Add Team", type="primary", use_container_width=True)
-                if submitted:
-                    if new_team.strip():
-                        if new_team.strip() not in teams:
-                            add_team(new_team.strip())
-                            st.toast(f"✅ Added {new_team.strip()}")
-                        else: st.warning("Already exists")
-                    else: st.warning("Enter a name")
-        with c2:
-            if teams:
-                rows=[{"Team":t,"Status":"🟢 Online" if t in sessions else "⚪ Not joined",
-                       "Cash":f"${teams[t]['cash']:,.0f}"} for t in sorted(teams.keys())]
-                st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True)
-            else:
-                st.info("No teams yet.")
-        if sessions:
-            st.markdown("**Release a slot:**")
-            rc1,rc2=st.columns([2,1])
-            with rc1: to_rel=st.selectbox("",sorted(sessions.keys()),label_visibility="collapsed")
-            with rc2:
-                if st.button("🔓 Release",use_container_width=True): release_team(to_rel); st.rerun()
-        if teams:
-            st.markdown("---")
-            if st.button("🗑 Remove All Teams",use_container_width=True): delete_all_teams(); st.rerun()
+        @st.fragment
+        def _teams_fragment():
+            _teams = get_teams()
+            _sessions = get_sessions()
+            c1,c2 = st.columns([1,2])
+            with c1:
+                with st.form("add_team_form", clear_on_submit=True):
+                    new_team = st.text_input("", placeholder="Team name…", label_visibility="collapsed")
+                    submitted = st.form_submit_button("➕ Add Team", type="primary", use_container_width=True)
+                    if submitted:
+                        if new_team.strip():
+                            if new_team.strip() not in _teams:
+                                add_team(new_team.strip())
+                                st.toast(f"✅ Added {new_team.strip()}")
+                            else: st.warning("Already exists")
+                        else: st.warning("Enter a name")
+            with c2:
+                if _teams:
+                    rows=[{"Team":t,"Status":"🟢 Online" if t in _sessions else "⚪ Not joined",
+                           "Cash":f"${_teams[t]['cash']:,.0f}"} for t in sorted(_teams.keys())]
+                    st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True)
+                else:
+                    st.info("No teams yet.")
+            if _sessions:
+                st.markdown("**Release a slot:**")
+                rc1,rc2=st.columns([2,1])
+                with rc1: to_rel=st.selectbox("",sorted(_sessions.keys()),label_visibility="collapsed")
+                with rc2:
+                    if st.button("🔓 Release",use_container_width=True): release_team(to_rel); st.rerun()
+            if _teams:
+                st.markdown("---")
+                if st.button("🗑 Remove All Teams",use_container_width=True): delete_all_teams(); st.rerun()
+        _teams_fragment()
 
     with tab_phase:
         st.markdown(f"""<div style='background:linear-gradient(135deg,#111827,#1a2332);border:1px solid #2a3a50;border-radius:14px;
@@ -1085,7 +1090,7 @@ if teams:
 else:
     st.info("No teams registered yet.")
 
-if phase in ("submit","trade") and not game_over:
+if phase in ("submit","trade") and not game_over and not is_admin:
     st.markdown("""
     <div style='text-align:center;margin-top:1.5rem;padding:.6rem;'>
         <div style='display:inline-flex;align-items:center;gap:.5rem;
