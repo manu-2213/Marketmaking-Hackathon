@@ -657,12 +657,16 @@ if is_admin:
     with tab_teams:
         c1,c2 = st.columns([1,2])
         with c1:
-            new_team = st.text_input("", placeholder="Team name…", label_visibility="collapsed")
-            if st.button("➕ Add Team", type="primary", use_container_width=True):
-                if new_team.strip():
-                    if new_team.strip() not in teams: add_team(new_team.strip()); st.rerun()
-                    else: st.warning("Already exists")
-                else: st.warning("Enter a name")
+            with st.form("add_team_form", clear_on_submit=True):
+                new_team = st.text_input("", placeholder="Team name…", label_visibility="collapsed")
+                submitted = st.form_submit_button("➕ Add Team", type="primary", use_container_width=True)
+                if submitted:
+                    if new_team.strip():
+                        if new_team.strip() not in teams:
+                            add_team(new_team.strip())
+                            st.rerun()
+                        else: st.warning("Already exists")
+                    else: st.warning("Enter a name")
         with c2:
             if teams:
                 rows=[{"Team":t,"Status":"🟢 Online" if t in sessions else "⚪ Not joined",
