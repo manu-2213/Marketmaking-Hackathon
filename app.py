@@ -664,7 +664,7 @@ if is_admin:
                     if new_team.strip():
                         if new_team.strip() not in teams:
                             add_team(new_team.strip())
-                            st.rerun()
+                            st.toast(f"✅ Added {new_team.strip()}")
                         else: st.warning("Already exists")
                     else: st.warning("Enter a name")
         with c2:
