@@ -1,98 +1,163 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
+from supabase import create_client, Client
 from datetime import datetime
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Stock Prediction Market", layout="wide", page_icon="📈")
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-STARTING_BUDGET   = 100_000
-STOCKS            = [f"stock_{i}" for i in range(1, 10)]
-TOTAL_ROUNDS      = 9
-ADMIN_PASSWORD    = "admin123"   # change before running!
+STARTING_BUDGET = 100_000
+STOCKS          = [f"stock_{i}" for i in range(1, 10)]
+TOTAL_ROUNDS    = 9
+ADMIN_PASSWORD  = "admin123"   # ← change before running!
 
-# ── Session state bootstrap ────────────────────────────────────────────────────
-def init_state():
-    defaults = {
-        "teams":          {},          # {team_name: {cash, positions, trades}}
-        "round":          1,           # current stock round (1-9)
-        "phase":          "submit",    # submit | trade | reveal
-        "spreads":        {},          # {team: {bid, ask}} for current round
-        "market_maker":   None,
-        "true_prices":    {},          # {stock: price} — filled by admin at reveal
-        "trade_log":      [],          # list of trade dicts
-        "round_history":  [],          # closed rounds summary
-        "game_over":      False,
-    }
-    for k, v in defaults.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
+# ── Supabase client ────────────────────────────────────────────────────────────
+@st.cache_resource
+def get_supabase() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
 
-init_state()
-S = st.session_state
+sb = get_supabase()
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
-def current_stock():
-    return STOCKS[S["round"] - 1]
+# ── DB helpers ─────────────────────────────────────────────────────────────────
+def get_game_state():
+    r = sb.table("game_state").select("*").eq("id", 1).single().execute()
+    return r.data
 
-def find_market_maker():
-    """Team with tightest (ask-bid) spread. Ties broken alphabetically."""
-    spreads = S["spreads"]
+def set_game_state(**kwargs):
+    sb.table("game_state").update(kwargs).eq("id", 1).execute()
+
+def get_teams():
+    r = sb.table("teams").select("*").execute()
+    return {row["name"]: row for row in r.data}
+
+def add_team(name):
+    sb.table("teams").insert({"name": name, "cash": STARTING_BUDGET}).execute()
+
+def delete_all_teams():
+    sb.table("teams").delete().neq("name", "").execute()
+
+def get_positions(team=None):
+    q = sb.table("positions").select("*")
+    if team:
+        q = q.eq("team", team)
+    return q.execute().data
+
+def upsert_position(team, stock, qty_delta, cost_delta):
+    r = sb.table("positions").select("*").eq("team", team).eq("stock", stock).execute()
+    if r.data:
+        row = r.data[0]
+        sb.table("positions").update({
+            "qty":        row["qty"] + qty_delta,
+            "cost_basis": row["cost_basis"] + cost_delta,
+        }).eq("id", row["id"]).execute()
+    else:
+        sb.table("positions").insert({
+            "team": team, "stock": stock,
+            "qty": qty_delta, "cost_basis": cost_delta,
+        }).execute()
+
+def update_cash(team, delta):
+    teams = get_teams()
+    new_cash = teams[team]["cash"] + delta
+    sb.table("teams").update({"cash": new_cash}).eq("name", team).execute()
+
+def get_spreads(round_num):
+    r = sb.table("spreads").select("*").eq("round", round_num).execute()
+    return {row["team"]: row for row in r.data}
+
+def upsert_spread(round_num, team, bid, ask):
+    sb.table("spreads").upsert({
+        "round": round_num, "team": team, "bid": bid, "ask": ask
+    }, on_conflict="round,team").execute()
+
+def get_true_prices():
+    r = sb.table("true_prices").select("*").execute()
+    return {row["stock"]: row["price"] for row in r.data}
+
+def set_true_price(stock, price):
+    sb.table("true_prices").upsert({"stock": stock, "price": price}).execute()
+
+def get_trade_log(round_num=None):
+    q = sb.table("trade_log").select("*").order("executed_at")
+    if round_num:
+        q = q.eq("round", round_num)
+    return q.execute().data
+
+def log_trade(round_num, stock, buyer, seller, price, qty=1):
+    sb.table("trade_log").insert({
+        "round": round_num, "stock": stock,
+        "buyer": buyer, "seller": seller,
+        "price": price, "qty": qty,
+    }).execute()
+
+def get_round_history():
+    return sb.table("round_history").select("*").order("round").execute().data
+
+def log_round(round_num, stock, market_maker, true_price):
+    sb.table("round_history").upsert({
+        "round": round_num, "stock": stock,
+        "market_maker": market_maker, "true_price": true_price,
+    }).execute()
+
+def reset_game():
+    sb.table("trade_log").delete().neq("id", 0).execute()
+    sb.table("round_history").delete().neq("round", 0).execute()
+    sb.table("spreads").delete().neq("id", 0).execute()
+    sb.table("true_prices").delete().neq("stock", "").execute()
+    sb.table("positions").delete().neq("id", 0).execute()
+    sb.table("teams").delete().neq("name", "").execute()
+    sb.table("game_state").update({
+        "round": 1, "phase": "submit",
+        "market_maker": None, "game_over": False,
+    }).eq("id", 1).execute()
+
+# ── Business logic ─────────────────────────────────────────────────────────────
+def find_market_maker(spreads):
     if not spreads:
         return None
-    best_team = min(spreads, key=lambda t: (
-        spreads[t]["ask"] - spreads[t]["bid"], t
-    ))
-    return best_team
+    return min(spreads, key=lambda t: (spreads[t]["ask"] - spreads[t]["bid"], t))
 
-def portfolio_value(team_name):
-    team  = S["teams"][team_name]
-    cash  = team["cash"]
-    pnl   = 0.0
-    for stock, qty in team["positions"].items():
-        if stock in S["true_prices"] and qty != 0:
-            pnl += qty * S["true_prices"][stock]
+def execute_trade(buyer, seller, stock, price, round_num, qty=1):
+    cost = price * qty
+    update_cash(buyer,  -cost)
+    update_cash(seller, +cost)
+    upsert_position(buyer,  stock, +qty, +cost)
+    upsert_position(seller, stock, -qty, -cost)
+    log_trade(round_num, stock, buyer, seller, price, qty)
+
+def portfolio_value(team_name, teams, positions, true_prices):
+    cash = teams[team_name]["cash"]
+    pnl  = sum(p["qty"] * true_prices[p["stock"]]
+               for p in positions
+               if p["team"] == team_name and p["stock"] in true_prices)
     return cash + pnl
 
-def unrealised_pnl(team_name):
-    team = S["teams"][team_name]
-    pnl  = 0.0
-    for stock, qty in team["positions"].items():
-        if stock in S["true_prices"] and qty != 0:
-            cost = team.get("cost_basis", {}).get(stock, 0)
-            pnl += qty * S["true_prices"][stock] - cost
-    return pnl
+def unrealised_pnl(team_name, positions, true_prices):
+    return sum(p["qty"] * true_prices[p["stock"]] - p["cost_basis"]
+               for p in positions
+               if p["team"] == team_name and p["stock"] in true_prices and p["qty"] != 0)
 
-def execute_trade(buyer_team, seller_team, stock, price, qty=1):
-    """Move stock & cash between two teams."""
-    cost = price * qty
-    # buyer pays cash, gets stock
-    S["teams"][buyer_team]["cash"] -= cost
-    S["teams"][buyer_team]["positions"][stock] = \
-        S["teams"][buyer_team]["positions"].get(stock, 0) + qty
-    S["teams"][buyer_team].setdefault("cost_basis", {})[stock] = \
-        S["teams"][buyer_team]["cost_basis"].get(stock, 0) + cost
+# ── Load shared state ──────────────────────────────────────────────────────────
+gs           = get_game_state()
+round_num    = gs["round"]
+phase        = gs["phase"]
+market_maker = gs["market_maker"]
+game_over    = gs["game_over"]
+stock        = STOCKS[round_num - 1]
 
-    # seller loses stock, gets cash
-    S["teams"][seller_team]["cash"] += cost
-    S["teams"][seller_team]["positions"][stock] = \
-        S["teams"][seller_team]["positions"].get(stock, 0) - qty
-    S["teams"][seller_team].setdefault("cost_basis", {})[stock] = \
-        S["teams"][seller_team]["cost_basis"].get(stock, 0) - cost
+teams       = get_teams()
+spreads     = get_spreads(round_num)
+true_prices = get_true_prices()
+positions   = get_positions()
 
-    S["trade_log"].append({
-        "round": S["round"], "stock": stock,
-        "buyer": buyer_team, "seller": seller_team,
-        "price": price, "qty": qty,
-        "time": datetime.now().strftime("%H:%M:%S"),
-    })
-
-# ── Sidebar — admin panel ──────────────────────────────────────────────────────
+# ── Sidebar — admin ────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🔐 Admin Panel")
-    pwd = st.text_input("Password", type="password")
-    is_admin = (pwd == ADMIN_PASSWORD)
+    pwd      = st.text_input("Password", type="password")
+    is_admin = pwd == ADMIN_PASSWORD
     if pwd and not is_admin:
         st.error("Wrong password")
 
@@ -100,283 +165,215 @@ with st.sidebar:
         st.success("Admin access granted")
         st.divider()
 
-        # Register teams
         st.subheader("Register Teams")
         new_team = st.text_input("Team name")
-        if st.button("Add team") and new_team:
-            if new_team not in S["teams"]:
-                S["teams"][new_team] = {
-                    "cash": STARTING_BUDGET,
-                    "positions": {},
-                    "cost_basis": {},
-                }
-                st.success(f"Added {new_team}")
+        if st.button("Add team") and new_team.strip():
+            if new_team.strip() not in teams:
+                add_team(new_team.strip())
+                st.success(f"Added {new_team.strip()}")
+                st.rerun()
             else:
                 st.warning("Already exists")
 
-        if S["teams"]:
-            st.write("**Registered:**", ", ".join(S["teams"].keys()))
+        if teams:
+            st.write("**Registered:**", ", ".join(sorted(teams.keys())))
             if st.button("🗑 Remove all teams", type="secondary"):
-                S["teams"] = {}
+                delete_all_teams()
+                st.rerun()
 
         st.divider()
+        st.subheader(f"Round {round_num} — {stock.upper()}")
+        st.write(f"Phase: **{phase.upper()}**")
 
-        # Phase controls
-        st.subheader(f"Round {S['round']} — {current_stock()}")
-        st.write(f"Phase: **{S['phase'].upper()}**")
-
-        if S["phase"] == "submit":
+        if phase == "submit":
             if st.button("⏩ Close submissions → Trading", type="primary"):
-                mm = find_market_maker()
+                mm = find_market_maker(spreads)
                 if mm:
-                    S["market_maker"] = mm
-                    S["phase"] = "trade"
+                    set_game_state(market_maker=mm, phase="trade")
                     st.rerun()
                 else:
                     st.warning("No spreads submitted yet")
 
-        elif S["phase"] == "trade":
+        elif phase == "trade":
             st.subheader("Reveal true price")
             true_p = st.number_input("True price ($)", min_value=0.0, value=100.0, step=0.01)
             if st.button("✅ Reveal & settle", type="primary"):
-                S["true_prices"][current_stock()] = true_p
-                S["phase"] = "reveal"
+                set_true_price(stock, true_p)
+                set_game_state(phase="reveal")
                 st.rerun()
 
-        elif S["phase"] == "reveal":
-            if S["round"] < TOTAL_ROUNDS:
+        elif phase == "reveal":
+            if round_num < TOTAL_ROUNDS:
                 if st.button("▶ Next round", type="primary"):
-                    S["round_history"].append({
-                        "round":        S["round"],
-                        "stock":        current_stock(),
-                        "market_maker": S["market_maker"],
-                        "true_price":   S["true_prices"].get(current_stock()),
-                    })
-                    S["round"]  += 1
-                    S["phase"]   = "submit"
-                    S["spreads"] = {}
-                    S["market_maker"] = None
+                    log_round(round_num, stock, market_maker, true_prices.get(stock))
+                    set_game_state(round=round_num + 1, phase="submit", market_maker=None)
                     st.rerun()
             else:
                 if st.button("🏁 End game", type="primary"):
-                    S["game_over"] = True
+                    log_round(round_num, stock, market_maker, true_prices.get(stock))
+                    set_game_state(game_over=True)
                     st.rerun()
 
         st.divider()
         if st.button("🔄 Reset entire game", type="secondary"):
-            for k in list(st.session_state.keys()):
-                del st.session_state[k]
+            reset_game()
             st.rerun()
 
-# ── Main area ──────────────────────────────────────────────────────────────────
+# ── Main ───────────────────────────────────────────────────────────────────────
 st.title("📈 Stock Prediction Market")
 
-if S["game_over"]:
+if game_over:
     st.balloons()
-    st.header("🏆 Final Results")
-    rows = []
-    for name in S["teams"]:
-        rows.append({
-            "Team":            name,
-            "Final Portfolio": f"${portfolio_value(name):,.0f}",
-            "Cash":            f"${S['teams'][name]['cash']:,.0f}",
-            "Total P&L":       f"${portfolio_value(name) - STARTING_BUDGET:+,.0f}",
-        })
+    st.header("🏁 Final Results")
+    rows = [{"Team": n,
+             "Final Portfolio": f"${portfolio_value(n, teams, positions, true_prices):,.0f}",
+             "Cash": f"${teams[n]['cash']:,.0f}",
+             "Total P&L": f"${portfolio_value(n, teams, positions, true_prices) - STARTING_BUDGET:+,.0f}"}
+            for n in teams]
     df = pd.DataFrame(rows).sort_values("Final Portfolio", ascending=False).reset_index(drop=True)
     df.index += 1
     st.dataframe(df, use_container_width=True)
     st.stop()
 
-# Progress bar
-progress = (S["round"] - 1) / TOTAL_ROUNDS
-col_prog, col_info = st.columns([3, 1])
-with col_prog:
-    st.progress(progress, text=f"Round {S['round']} of {TOTAL_ROUNDS}  •  {current_stock().upper()}  •  Phase: {S['phase'].upper()}")
-with col_info:
-    st.metric("Teams registered", len(S["teams"]))
-
+st.progress((round_num - 1) / TOTAL_ROUNDS,
+            text=f"Round {round_num} of {TOTAL_ROUNDS}  •  {stock.upper()}  •  Phase: {phase.upper()}")
 st.divider()
 
-# ── SUBMIT PHASE ───────────────────────────────────────────────────────────────
-if S["phase"] == "submit":
-    st.header(f"📋 Submit Spread — {current_stock().upper()}")
-    st.info("Each team: enter your predicted **bid** (buy price) and **ask** (sell price). Tightest spread becomes the market maker.")
+# ── SUBMIT ─────────────────────────────────────────────────────────────────────
+if phase == "submit":
+    st.header(f"📋 Submit Spread — {stock.upper()}")
+    st.info("Enter your **bid** (buy price) and **ask** (sell price). Tightest spread becomes the market maker.")
 
     col_form, col_submitted = st.columns([1, 1])
-
     with col_form:
-        if S["teams"]:
-            team_sel = st.selectbox("Your team", sorted(S["teams"].keys()))
-            bid_val  = st.number_input("Bid ($)", min_value=0.0, value=95.0, step=0.01, key="bid_input")
-            ask_val  = st.number_input("Ask ($)", min_value=0.0, value=105.0, step=0.01, key="ask_input")
-
+        if teams:
+            team_sel = st.selectbox("Your team", sorted(teams.keys()))
+            existing = spreads.get(team_sel, {})
+            bid_val  = st.number_input("Bid ($)", min_value=0.0,
+                                       value=float(existing.get("bid", 95.0)), step=0.01)
+            ask_val  = st.number_input("Ask ($)", min_value=0.0,
+                                       value=float(existing.get("ask", 105.0)), step=0.01)
             if bid_val >= ask_val:
                 st.error("Ask must be greater than bid")
             elif st.button("Submit spread", type="primary"):
-                S["spreads"][team_sel] = {"bid": bid_val, "ask": ask_val}
+                upsert_spread(round_num, team_sel, bid_val, ask_val)
                 st.success(f"Spread submitted for {team_sel}!")
                 st.rerun()
         else:
-            st.warning("No teams registered yet — ask admin to add teams.")
+            st.warning("No teams registered yet.")
 
     with col_submitted:
         st.subheader("Submitted so far")
-        if S["spreads"]:
-            rows = []
-            for t, sp in S["spreads"].items():
-                rows.append({"Team": t, "Bid": f"${sp['bid']:.2f}", "Ask": f"${sp['ask']:.2f}",
-                             "Spread": f"${sp['ask']-sp['bid']:.2f}"})
+        if spreads:
+            rows = [{"Team": t, "Bid": f"${s['bid']:.2f}",
+                     "Ask": f"${s['ask']:.2f}",
+                     "Spread": f"${s['ask']-s['bid']:.2f}"}
+                    for t, s in spreads.items()]
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-            st.caption(f"{len(S['spreads'])} / {len(S['teams'])} teams submitted")
+            st.caption(f"{len(spreads)} / {len(teams)} teams submitted")
         else:
             st.write("Waiting for submissions…")
 
-# ── TRADE PHASE ────────────────────────────────────────────────────────────────
-elif S["phase"] == "trade":
-    mm   = S["market_maker"]
-    sp   = S["spreads"][mm]
-    stock = current_stock()
-
+# ── TRADE ──────────────────────────────────────────────────────────────────────
+elif phase == "trade":
+    mm_spread = spreads.get(market_maker, {})
     st.header(f"💹 Trading — {stock.upper()}")
 
-    col_mm, col_sp = st.columns(2)
-    with col_mm:
-        st.metric("🏦 Market Maker", mm)
-        st.caption("Market maker MUST fill every trade. They can go negative.")
-    with col_sp:
-        st.metric("Best Bid", f"${sp['bid']:.2f}")
-        st.metric("Best Ask", f"${sp['ask']:.2f}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("🏦 Market Maker", market_maker)
+    c2.metric("Best Bid", f"${mm_spread.get('bid', 0):.2f}")
+    c3.metric("Best Ask", f"${mm_spread.get('ask', 0):.2f}")
 
     st.divider()
-    st.subheader("All submitted spreads")
-    rows = []
-    for t, s in S["spreads"].items():
-        rows.append({
-            "Team": t,
-            "Bid":  f"${s['bid']:.2f}",
-            "Ask":  f"${s['ask']:.2f}",
-            "Spread": f"${s['ask']-s['bid']:.2f}",
-            "Market Maker": "✅" if t == mm else "",
-        })
+    rows = [{"Team": t, "Bid": f"${s['bid']:.2f}", "Ask": f"${s['ask']:.2f}",
+             "Spread": f"${s['ask']-s['bid']:.2f}",
+             "Market Maker": "✅" if t == market_maker else ""}
+            for t, s in spreads.items()]
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
     st.divider()
-    st.subheader("Execute trade")
-    st.caption("Non-market-maker teams choose to BUY (at ask) or SELL (at bid) from the market maker.")
+    st.subheader("Execute a trade")
+    non_mm = [t for t in teams if t != market_maker]
+    if non_mm:
+        c1, c2 = st.columns(2)
+        with c1:
+            trading_team = st.selectbox("Team", sorted(non_mm))
+        with c2:
+            action = st.selectbox("Action", ["BUY (at ask)", "SELL (at bid)"])
 
-    non_mm_teams = [t for t in S["teams"] if t != mm]
-    if non_mm_teams:
-        col_t, col_a = st.columns(2)
-        with col_t:
-            trading_team = st.selectbox("Team", sorted(non_mm_teams))
-        with col_a:
-            action = st.selectbox("Action", ["BUY (buy at ask price)", "SELL (sell at bid price)"])
-
-        price = sp["ask"] if action.startswith("BUY") else sp["bid"]
+        price = mm_spread.get("ask" if action.startswith("BUY") else "bid", 100)
         st.write(f"Trade price: **${price:.2f}**")
 
         if st.button("⚡ Execute trade", type="primary"):
             if action.startswith("BUY"):
-                execute_trade(trading_team, mm, stock, price)
-                st.success(f"{trading_team} bought 1 {stock} from {mm} @ ${price:.2f}")
+                execute_trade(trading_team, market_maker, stock, price, round_num)
+                st.success(f"{trading_team} bought 1 {stock} from {market_maker} @ ${price:.2f}")
             else:
-                execute_trade(mm, trading_team, stock, price)
-                st.success(f"{trading_team} sold 1 {stock} to {mm} @ ${price:.2f}")
+                execute_trade(market_maker, trading_team, stock, price, round_num)
+                st.success(f"{trading_team} sold 1 {stock} to {market_maker} @ ${price:.2f}")
             st.rerun()
-    else:
-        st.info("Only one team — no trades possible.")
 
-    # Live trade log for this round
-    round_trades = [t for t in S["trade_log"] if t["round"] == S["round"]]
+    round_trades = get_trade_log(round_num)
     if round_trades:
         st.subheader(f"Trades this round ({len(round_trades)})")
         st.dataframe(pd.DataFrame(round_trades), use_container_width=True, hide_index=True)
 
-# ── REVEAL PHASE ───────────────────────────────────────────────────────────────
-elif S["phase"] == "reveal":
-    stock      = current_stock()
-    true_price = S["true_prices"].get(stock, "?")
-    mm         = S["market_maker"]
-
+# ── REVEAL ─────────────────────────────────────────────────────────────────────
+elif phase == "reveal":
+    true_price = true_prices.get(stock)
     st.header(f"🎯 Reveal — {stock.upper()}")
-    st.metric("True Price", f"${true_price:.2f}" if isinstance(true_price, float) else true_price)
-    st.metric("Market Maker this round", mm)
 
-    if isinstance(true_price, float):
-        sp = S["spreads"].get(mm, {})
-        mm_edge = ((sp.get("ask", true_price) - true_price) +
-                   (true_price - sp.get("bid", true_price))) / 2
-        st.caption(f"MM spread edge per trade: ${mm_edge:.2f}")
+    c1, c2 = st.columns(2)
+    c1.metric("True Price", f"${true_price:.2f}" if true_price else "?")
+    c2.metric("Market Maker", market_maker or "—")
 
     st.divider()
-    st.subheader("Spread accuracy — all teams")
     rows = []
-    for t, s in S["spreads"].items():
-        inside = (s["bid"] <= true_price <= s["ask"]) if isinstance(true_price, float) else "?"
+    for t, s in spreads.items():
+        inside = (s["bid"] <= true_price <= s["ask"]) if true_price else None
         rows.append({
-            "Team":    t,
-            "Bid":     f"${s['bid']:.2f}",
-            "Ask":     f"${s['ask']:.2f}",
-            "Spread":  f"${s['ask']-s['bid']:.2f}",
-            "Contains true price": "✅" if inside is True else ("❌" if inside is False else "?"),
-            "Market Maker": "🏦" if t == mm else "",
+            "Team":   t, "Bid": f"${s['bid']:.2f}",
+            "Ask":    f"${s['ask']:.2f}", "Spread": f"${s['ask']-s['bid']:.2f}",
+            "Contains true price": "✅" if inside else ("❌" if inside is False else "?"),
+            "Market Maker": "🏦" if t == market_maker else "",
         })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-# ── LEADERBOARD (always visible) ───────────────────────────────────────────────
+# ── LEADERBOARD ────────────────────────────────────────────────────────────────
 st.divider()
 st.header("🏆 Live Leaderboard")
 
-if S["teams"]:
+if teams:
     rows = []
-    for name, team in S["teams"].items():
-        unreal = unrealised_pnl(name)
-        total  = portfolio_value(name)
-        pnl    = total - STARTING_BUDGET
+    for name in teams:
+        total  = portfolio_value(name, teams, positions, true_prices)
+        unreal = unrealised_pnl(name, positions, true_prices)
         rows.append({
-            "Team":             name,
-            "Cash":             team["cash"],
-            "Unrealised P&L":   unreal,
-            "Total Portfolio":  total,
-            "vs Start":         pnl,
+            "":                "🏦" if name == market_maker else "",
+            "Team":            name,
+            "Cash":            f"${teams[name]['cash']:,.0f}",
+            "Unrealised P&L":  f"${unreal:+,.0f}",
+            "Total Portfolio": f"${total:,.0f}",
+            "vs Start":        f"${total - STARTING_BUDGET:+,.0f}",
         })
+    lb = sorted(rows, key=lambda r: float(r["Total Portfolio"].replace("$","").replace(",","")), reverse=True)
+    lb_df = pd.DataFrame(lb).reset_index(drop=True)
+    lb_df.index += 1
+    st.dataframe(lb_df, use_container_width=True)
 
-    lb = pd.DataFrame(rows).sort_values("Total Portfolio", ascending=False).reset_index(drop=True)
-    lb.index += 1
+    history = get_round_history()
+    if history:
+        st.subheader("Round history")
+        st.dataframe(pd.DataFrame(history), use_container_width=True, hide_index=True)
 
-    # Format for display
-    def fmt(v): return f"${v:,.0f}"
-    def fmt_pnl(v): return f"+${v:,.0f}" if v >= 0 else f"-${abs(v):,.0f}"
-
-    lb_display = lb.copy()
-    lb_display["Cash"]            = lb["Cash"].apply(fmt)
-    lb_display["Unrealised P&L"]  = lb["Unrealised P&L"].apply(fmt_pnl)
-    lb_display["Total Portfolio"] = lb["Total Portfolio"].apply(fmt)
-    lb_display["vs Start"]        = lb["vs Start"].apply(fmt_pnl)
-
-    # Highlight market maker
-    if S["market_maker"]:
-        lb_display[""] = lb_display["Team"].apply(
-            lambda t: "🏦" if t == S["market_maker"] else ""
-        )
-
-    st.dataframe(lb_display, use_container_width=True)
-
-    # Market maker history
-    if S["round_history"]:
-        st.subheader("Market maker history")
-        st.dataframe(pd.DataFrame(S["round_history"]), use_container_width=True, hide_index=True)
-
-    # Full trade log
-    if S["trade_log"]:
+    all_trades = get_trade_log()
+    if all_trades:
         with st.expander("📜 Full trade log"):
-            st.dataframe(pd.DataFrame(S["trade_log"]), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(all_trades), use_container_width=True, hide_index=True)
 else:
-    st.info("No teams registered yet. Admin must add teams in the sidebar.")
+    st.info("No teams registered yet.")
 
-# Auto-refresh every 5 seconds during active phases
-if S["phase"] in ("submit", "trade") and not S["game_over"]:
-    st.caption("🔄 Auto-refreshing every 5s")
-    import time
-    time.sleep(5)
-    st.rerun()
+# Auto-refresh every 3s during active phases
+if phase in ("submit", "trade") and not game_over:
+    st.caption("🔄 Auto-refreshing every 3s")
+    import time; time.sleep(3); st.rerun()
