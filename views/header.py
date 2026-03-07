@@ -1,0 +1,41 @@
+import streamlit as st
+import html as _html
+
+from config import TOTAL_ROUNDS
+
+
+def _esc(s):
+    return _html.escape(str(s)) if s else ""
+
+
+def render_header(is_admin, my_team, round_num, stock, phase):
+    identity_label = "🔧 Admin" if is_admin else f"🏷 {_esc(my_team)}"
+    phase_colors = {"submit": "#22d3ee", "trade": "#fbbf24", "reveal": "#34d399"}
+    phase_color = phase_colors.get(phase, "#fbbf24")
+
+    st.markdown(f"""
+    <div class='animate-in' style='display:flex;justify-content:space-between;align-items:center;
+                padding:.6rem 1.25rem;background:linear-gradient(135deg,rgba(17,24,39,.98),rgba(26,35,50,.95));
+                border:1px solid #2a3a50;border-radius:14px;margin-bottom:1.75rem;
+                backdrop-filter:blur(16px);box-shadow:0 4px 20px rgba(0,0,0,.3);'>
+        <div style='display:flex;align-items:center;gap:1.5rem;'>
+            <span style='font-family:JetBrains Mono,monospace;font-size:.75rem;font-weight:700;
+                         background:linear-gradient(135deg,#22d3ee,#a78bfa);-webkit-background-clip:text;
+                         -webkit-text-fill-color:transparent;letter-spacing:.1em;'>📈 MARKET MAKING</span>
+            <span style='color:#2a3a50;font-size:1.1rem;'>│</span>
+            <div style='display:flex;align-items:center;gap:.75rem;'>
+                <span style='font-family:JetBrains Mono,monospace;font-size:.7rem;
+                             padding:.2rem .6rem;border-radius:6px;background:rgba(167,139,250,.1);
+                             border:1px solid rgba(167,139,250,.2);color:#a78bfa;font-weight:600;'>{stock.upper()}</span>
+                <span style='font-family:JetBrains Mono,monospace;font-size:.7rem;color:#94a3b8;'>RD {round_num}/{TOTAL_ROUNDS}</span>
+                <span style='font-family:JetBrains Mono,monospace;font-size:.65rem;
+                             padding:.15rem .5rem;border-radius:4px;
+                             background:{phase_color}18;color:{phase_color};font-weight:700;
+                             letter-spacing:.08em;'>{phase.upper()}</span>
+            </div>
+        </div>
+        <span style='font-family:JetBrains Mono,monospace;font-size:.7rem;color:#94a3b8;
+                     background:#1a2332;padding:.3rem .8rem;border-radius:8px;
+                     border:1px solid #2a3a50;'>{identity_label}</span>
+    </div>
+    """, unsafe_allow_html=True)
