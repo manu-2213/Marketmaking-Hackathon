@@ -34,24 +34,29 @@ html,body,[data-testid="stAppViewContainer"]{
 @keyframes pulse-glow{0%,100%{opacity:.6}50%{opacity:1}}
 @keyframes float-up{0%{opacity:0;transform:translateY(20px)}100%{opacity:1;transform:translateY(0)}}</style>""", unsafe_allow_html=True)
 
-# ── Fullscreen toggle button (uses st.components for real JS execution) ────────
+# ── Fullscreen toggle button (injected into parent DOM via component JS) ───────
 import streamlit.components.v1 as components
 components.html("""
-<style>
-#fs-btn{position:fixed;bottom:1.2rem;right:1.2rem;z-index:999999;
-    background:rgba(17,24,39,.9);border:1px solid #2a3a50;border-radius:10px;
-    color:#94a3b8;font-size:1.4rem;padding:.5rem .65rem;cursor:pointer;
-    backdrop-filter:blur(8px);transition:all .2s;line-height:1}
-#fs-btn:hover{color:#22d3ee;border-color:#22d3ee;box-shadow:0 0 14px rgba(34,211,238,.3)}
-</style>
-<button id="fs-btn" title="Toggle fullscreen">⛶</button>
 <script>
-const btn=document.getElementById('fs-btn');
-const root=window.parent.document.documentElement;
-btn.addEventListener('click',()=>{
-  if(!window.parent.document.fullscreenElement){root.requestFullscreen().catch(()=>{})}
-  else{window.parent.document.exitFullscreen()}
-});
+(function(){
+  var doc=window.parent.document;
+  if(doc.getElementById('fs-btn'))return;
+  var s=doc.createElement('style');
+  s.textContent=`
+    #fs-btn{position:fixed;top:1rem;right:1rem;z-index:999999;
+      background:rgba(17,24,39,.92);border:1px solid #2a3a50;border-radius:10px;
+      color:#94a3b8;font-size:1.5rem;padding:.55rem .7rem;cursor:pointer;
+      backdrop-filter:blur(8px);transition:all .2s;line-height:1;font-family:sans-serif}
+    #fs-btn:hover{color:#22d3ee;border-color:#22d3ee;box-shadow:0 0 14px rgba(34,211,238,.3)}`;
+  doc.head.appendChild(s);
+  var b=doc.createElement('button');
+  b.id='fs-btn';b.title='Toggle fullscreen';b.textContent='⛶';
+  b.addEventListener('click',function(){
+    if(!doc.fullscreenElement){doc.documentElement.requestFullscreen().catch(function(){})}
+    else{doc.exitFullscreen()}
+  });
+  doc.body.appendChild(b);
+})();
 </script>
 """, height=0)
 
