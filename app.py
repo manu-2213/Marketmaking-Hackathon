@@ -77,22 +77,24 @@ if not is_admin:
         "reveal": "The true price is revealed — all positions are settled to cash.",
     }
     _pc = {"submit": "#22d3ee", "trade": "#fbbf24", "reveal": "#34d399"}.get(phase, "#fbbf24")
-    st.markdown(f"""
-    <div class='animate-in' style='text-align:center;padding:2.2rem 1rem 1.6rem;margin-bottom:1.5rem;'>
-        <div style='font-size:.9rem;letter-spacing:.35em;color:#64748b;text-transform:uppercase;
-                    font-weight:600;margin-bottom:.5rem;'>Round {round_num} of {TOTAL_ROUNDS}</div>
-        <div style='font-size:3.8rem;font-weight:900;letter-spacing:-.04em;
-                    background:linear-gradient(135deg,#22d3ee,#a78bfa);-webkit-background-clip:text;
-                    -webkit-text-fill-color:transparent;line-height:1.1;margin-bottom:.7rem;
-                    '>{stock.upper().replace("_"," ")}</div>
-        <div style='display:inline-block;padding:.35rem 1rem;border-radius:8px;
-                    background:{_pc}18;border:1px solid {_pc}30;
-                    font-size:.8rem;font-weight:700;color:{_pc};letter-spacing:.18em;
-                    text-transform:uppercase;margin-bottom:.9rem;'>{phase.upper()} PHASE</div>
-        <div style='color:#94a3b8;font-size:1.05rem;max-width:520px;margin:.2rem auto 0;
-                    line-height:1.5;'>{_phase_hints.get(phase,"")}</div>
-    </div>
-    """, unsafe_allow_html=True)
+    _stock_display = stock.upper().replace("_", " ")
+    _hero = (
+        f"<p style='text-align:center;font-size:.9rem;letter-spacing:.35em;color:#64748b;"
+        f"text-transform:uppercase;font-weight:600;margin-bottom:.3rem;padding-top:1.5rem;'>"
+        f"Round {round_num} of {TOTAL_ROUNDS}</p>"
+        f"<p style='text-align:center;font-size:3.8rem;font-weight:900;letter-spacing:-.04em;"
+        f"background:linear-gradient(135deg,#22d3ee,#a78bfa);-webkit-background-clip:text;"
+        f"-webkit-text-fill-color:transparent;line-height:1.1;margin:0 0 .5rem;'>"
+        f"{_stock_display}</p>"
+        f"<p style='text-align:center;margin:0 0 .6rem;'>"
+        f"<span style='display:inline-block;padding:.35rem 1rem;border-radius:8px;"
+        f"background:{_pc}18;border:1px solid {_pc}30;"
+        f"font-size:.8rem;font-weight:700;color:{_pc};letter-spacing:.18em;"
+        f"text-transform:uppercase;'>{phase.upper()} PHASE</span></p>"
+        f"<p style='text-align:center;color:#94a3b8;font-size:1.05rem;max-width:520px;"
+        f"margin:.2rem auto 1.2rem;line-height:1.5;'>{_phase_hints.get(phase,'')}</p>"
+    )
+    st.markdown(_hero, unsafe_allow_html=True)
 
 # ── Admin panel ────────────────────────────────────────────────────────────────
 if is_admin:
