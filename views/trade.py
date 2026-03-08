@@ -3,7 +3,7 @@ import pandas as pd
 import html as _html
 
 from config import MIN_SHARES
-from db import has_traded_this_round, has_passed_this_round, log_pass, get_trade_log
+from db import has_traded_this_round, get_trade_log
 from game import execute_trade
 
 
@@ -78,7 +78,6 @@ def render_trade(is_admin, my_team, market_maker, round_num, stock, teams, sprea
 
 def _render_trade_form(my_team, market_maker, round_num, stock, teams, mm_bid, mm_ask):
     already_traded = has_traded_this_round(my_team, round_num)
-    already_passed = has_passed_this_round(my_team, round_num)
     my_cash = teams[my_team]["cash"]
 
     st.markdown(f"""<h3 style='font-weight:800;font-size:1.25rem;margin-bottom:.25rem;
@@ -86,32 +85,14 @@ def _render_trade_form(my_team, market_maker, round_num, stock, teams, mm_bid, m
         <p style='color:#64748b;font-size:.78rem;margin-bottom:1rem;'>Min {MIN_SHARES} shares per trade</p>""",
         unsafe_allow_html=True)
 
-    if already_traded or already_passed:
-        if already_passed:
-            st.info("⏭ You passed this round. Wait for the reveal.")
-        else:
-            st.warning("✅ You've already placed your trade this round. Wait for the reveal.")
+    if already_traded:
+        st.warning("✅ You've already placed your trade this round. Wait for the reveal.")
         return
 
     action = st.radio("Direction",
-                       ["🟢 BUY shares (at ask)", "🔴 SELL shares (at bid)", "⏭ PASS (no trade)"],
+                       ["🟢 BUY shares (at ask)", "🔴 SELL shares (at bid)"],
                        horizontal=True)
-    is_pass = "PASS" in action
     is_buy = "BUY" in action
-
-    if is_pass:
-        st.markdown("""<div style='background:linear-gradient(135deg,rgba(100,116,139,.06),rgba(148,163,184,.04));
-            border:1px solid rgba(100,116,139,.2);border-radius:14px;
-            padding:1rem 1.2rem;margin:.6rem 0;'>
-            <div style='display:flex;align-items:center;gap:.6rem;'>
-                <span style='font-size:1.3rem;'>⏭</span>
-                <span style='color:#94a3b8;font-size:.85rem;font-weight:500;'>You will sit out this round — no position taken.</span>
-            </div>
-        </div>""", unsafe_allow_html=True)
-        if st.button("⏭ Confirm PASS", type="primary", use_container_width=True):
-            log_pass(my_team, round_num, stock)
-            st.info("Passed this round.")
-        return
 
     price = mm_ask if is_buy else mm_bid
     if is_buy:
