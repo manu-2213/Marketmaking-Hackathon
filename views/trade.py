@@ -111,7 +111,6 @@ def _render_trade_form(my_team, market_maker, round_num, stock, teams, mm_bid, m
         if st.button("⏭ Confirm PASS", type="primary", use_container_width=True):
             log_pass(my_team, round_num, stock)
             st.info("Passed this round.")
-            st.rerun()
         return
 
     price = mm_ask if is_buy else mm_bid

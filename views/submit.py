@@ -49,7 +49,6 @@ def render_submit(is_admin, my_team, round_num, stock, teams, spreads):
             if st.button("🔒 Lock In Spread", type="primary", use_container_width=True):
                 upsert_spread(round_num, my_team, bid_val, ask_val)
                 st.success("Spread submitted ✓")
-                st.rerun()
 
     with right:
         st.markdown(f"""<h3 style='font-size:.85rem;font-weight:700;color:#7a90a8;

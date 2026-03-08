@@ -85,12 +85,16 @@ elif phase == "reveal":
 # ── Leaderboard ────────────────────────────────────────────────────────────────
 render_leaderboard(my_team, market_maker, teams, round_num, phase, game_over, is_admin)
 
-# ── Auto-refresh for non-admin players (replaces the broken meta refresh) ──────
+# ── Live state-change watcher (non-admin players only) ─────────────────────────
 if phase in ("submit", "trade") and not game_over and not is_admin:
-    @st.fragment(run_every=8)
-    def _auto_refresh():
-        """Silently polls for state changes and triggers a full rerun when needed."""
+    @st.fragment(run_every=10)
+    def _state_watcher():
+        """Polls for phase/round changes and shows a refresh prompt."""
         latest = get_game_state()
         if latest["phase"] != phase or latest["round"] != round_num or latest["game_over"]:
-            st.rerun(scope="app")
-    _auto_refresh()
+            st.warning("⚡ The game has moved on!")
+            if st.button("🔄 Refresh Page", type="primary", key="_sw_refresh"):
+                st.rerun(scope="app")
+        else:
+            st.caption("")  # keep fragment container alive
+    _state_watcher()
