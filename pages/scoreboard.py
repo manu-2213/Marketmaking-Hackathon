@@ -33,7 +33,20 @@ html,body,[data-testid="stAppViewContainer"]{
 @keyframes shimmer{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
 @keyframes pulse-glow{0%,100%{opacity:.6}50%{opacity:1}}
 @keyframes float-up{0%{opacity:0;transform:translateY(20px)}100%{opacity:1;transform:translateY(0)}}
+#fs-btn{position:fixed;bottom:1.2rem;right:1.2rem;z-index:9999;
+    background:rgba(17,24,39,.85);border:1px solid #2a3a50;border-radius:10px;
+    color:#94a3b8;font-size:1.3rem;padding:.45rem .6rem;cursor:pointer;
+    backdrop-filter:blur(8px);transition:all .2s}
+#fs-btn:hover{color:#22d3ee;border-color:#22d3ee;box-shadow:0 0 12px rgba(34,211,238,.25)}
 </style>""", unsafe_allow_html=True)
+
+# ── Fullscreen toggle button (browser Fullscreen API) ─────────────────────────
+st.markdown("""
+<button id="fs-btn" onclick="
+  if(!document.fullscreenElement){document.documentElement.requestFullscreen()}
+  else{document.exitFullscreen()}
+" title="Toggle fullscreen">⛶</button>
+""", unsafe_allow_html=True)
 
 # ── Team colors palette ────────────────────────────────────────────────────────
 TEAM_COLORS = [
