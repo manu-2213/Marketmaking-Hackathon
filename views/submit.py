@@ -35,6 +35,7 @@ def render_submit(is_admin, my_team, round_num, stock, teams, spreads):
             st.error("Ask must be greater than bid.")
         else:
             spread_w = ask_val - bid_val
+            submitted_note = "&nbsp;&nbsp;<span style='color:#fbbf24;font-size:.7rem;font-weight:600;'>✓ SUBMITTED — resubmit to update</span>" if already else ""
             st.markdown(f"""<div style='background:linear-gradient(135deg,rgba(34,211,238,.06),rgba(52,211,153,.04));
                 border:1px solid rgba(34,211,238,.2);border-radius:14px;
                 padding:.9rem 1.1rem;margin:.6rem 0;font-family:JetBrains Mono,monospace;
@@ -43,7 +44,7 @@ def render_submit(is_admin, my_team, round_num, stock, teams, spreads):
                             background:linear-gradient(90deg,#22d3ee,#34d399);opacity:.5;'></div>
                 <span style='color:#64748b;font-size:.7rem;font-weight:600;letter-spacing:.1em;'>SPREAD WIDTH</span><br>
                 <span style='color:#22d3ee;font-size:1.3rem;font-weight:700;'>${spread_w:.2f}</span>
-                {"&nbsp;&nbsp;<span style='color:#fbbf24;font-size:.7rem;font-weight:600;'>✓ SUBMITTED — resubmit to update</span>" if already else ""}
+                {submitted_note}
             </div>""", unsafe_allow_html=True)
 
             if st.button("🔒 Lock In Spread", type="primary", use_container_width=True):

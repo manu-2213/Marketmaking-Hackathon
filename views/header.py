@@ -9,9 +9,17 @@ def _esc(s):
 
 
 def render_header(is_admin, my_team, round_num, stock, phase):
-    identity_label = "🔧 Admin" if is_admin else f"🏷 {_esc(my_team)}"
     phase_colors = {"submit": "#22d3ee", "trade": "#fbbf24", "reveal": "#34d399"}
     phase_color = phase_colors.get(phase, "#fbbf24")
+
+    if is_admin:
+        identity_html = "<span style='font-family:JetBrains Mono,monospace;font-size:.75rem;color:#a78bfa;font-weight:700;'>🔧 Admin</span>"
+    else:
+        identity_html = f"""<span style='font-family:JetBrains Mono,monospace;font-size:.9rem;font-weight:800;
+                     color:#f1f5f9;background:linear-gradient(135deg,rgba(34,211,238,.12),rgba(167,139,250,.08));
+                     padding:.35rem .9rem;border-radius:10px;
+                     border:1px solid rgba(34,211,238,.25);
+                     box-shadow:0 0 12px rgba(34,211,238,.08);'>{_esc(my_team)}</span>"""
 
     st.markdown(f"""
     <div class='animate-in' style='display:flex;justify-content:space-between;align-items:center;
@@ -34,8 +42,6 @@ def render_header(is_admin, my_team, round_num, stock, phase):
                              letter-spacing:.08em;'>{phase.upper()}</span>
             </div>
         </div>
-        <span style='font-family:JetBrains Mono,monospace;font-size:.7rem;color:#94a3b8;
-                     background:#1a2332;padding:.3rem .8rem;border-radius:8px;
-                     border:1px solid #2a3a50;'>{identity_label}</span>
+        {identity_html}
     </div>
     """, unsafe_allow_html=True)

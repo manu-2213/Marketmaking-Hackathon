@@ -85,16 +85,22 @@ elif phase == "reveal":
 # ── Leaderboard ────────────────────────────────────────────────────────────────
 render_leaderboard(my_team, market_maker, teams, round_num, phase, game_over, is_admin)
 
-# ── Live state-change watcher (non-admin players only) ─────────────────────────
-if phase in ("submit", "trade") and not game_over and not is_admin:
-    @st.fragment(run_every=10)
-    def _state_watcher():
-        """Polls for phase/round changes and shows a refresh prompt."""
-        latest = get_game_state()
-        if latest["phase"] != phase or latest["round"] != round_num or latest["game_over"]:
-            st.warning("⚡ The game has moved on!")
-            if st.button("🔄 Refresh Page", type="primary", key="_sw_refresh"):
-                st.rerun(scope="app")
-        else:
-            st.caption("")  # keep fragment container alive
-    _state_watcher()
+# ── Auto-refresh: polls for any game-state change and reruns automatically ─────
+if not game_over:
+    @st.fragment(run_every=8)
+    def _auto_refresh():
+        latest_gs = get_game_state()
+        latest_spreads = get_spreads(latest_gs["round"])
+        latest_teams = get_teams()
+        # Detect any meaningful change
+        changed = (
+            latest_gs["phase"] != phase
+            or latest_gs["round"] != round_num
+            or latest_gs["game_over"] != game_over
+            or latest_gs["market_maker"] != market_maker
+            or len(latest_spreads) != len(spreads)
+            or len(latest_teams) != len(teams)
+        )
+        if changed:
+            st.rerun(scope="app")
+    _auto_refresh()
