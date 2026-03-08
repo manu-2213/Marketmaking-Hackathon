@@ -68,7 +68,31 @@ if game_over:
 
 # ── Progress bar ───────────────────────────────────────────────────────────────
 st.progress((round_num - 1) / TOTAL_ROUNDS)
-st.markdown("<br>", unsafe_allow_html=True)
+
+# ── Hero: Stock & Round (teams only) ──────────────────────────────────────────
+if not is_admin:
+    _phase_hints = {
+        "submit": "Set your bid &amp; ask prices. The tightest spread becomes market maker.",
+        "trade":  "Buy or sell shares from the market maker at their quoted prices.",
+        "reveal": "The true price is revealed — all positions are settled to cash.",
+    }
+    _pc = {"submit": "#22d3ee", "trade": "#fbbf24", "reveal": "#34d399"}.get(phase, "#fbbf24")
+    st.markdown(f"""
+    <div class='animate-in' style='text-align:center;padding:2.2rem 1rem 1.6rem;margin-bottom:1.5rem;'>
+        <div style='font-size:.9rem;letter-spacing:.35em;color:#64748b;text-transform:uppercase;
+                    font-weight:600;margin-bottom:.5rem;'>Round {round_num} of {TOTAL_ROUNDS}</div>
+        <div style='font-size:3.8rem;font-weight:900;letter-spacing:-.04em;
+                    background:linear-gradient(135deg,#22d3ee,#a78bfa);-webkit-background-clip:text;
+                    -webkit-text-fill-color:transparent;line-height:1.1;margin-bottom:.7rem;
+                    '>{stock.upper().replace("_"," ")}</div>
+        <div style='display:inline-block;padding:.35rem 1rem;border-radius:8px;
+                    background:{_pc}18;border:1px solid {_pc}30;
+                    font-size:.8rem;font-weight:700;color:{_pc};letter-spacing:.18em;
+                    text-transform:uppercase;margin-bottom:.9rem;'>{phase.upper()} PHASE</div>
+        <div style='color:#94a3b8;font-size:1.05rem;max-width:520px;margin:.2rem auto 0;
+                    line-height:1.5;'>{_phase_hints.get(phase,"")}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ── Admin panel ────────────────────────────────────────────────────────────────
 if is_admin:
