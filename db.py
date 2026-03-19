@@ -62,13 +62,14 @@ def get_team_for_session(sid):
     if not rows:
         return None
 
-    # Defensive normalization: if stale duplicate bindings exist for one session,
-    # keep a deterministic team and clear the others.
     teams = sorted({r["team"] for r in rows})
-    keeper = teams[0]
-    for stale_team in teams[1:]:
-        sb().table("team_sessions").delete().eq("team", stale_team).eq("session_id", sid).execute()
-    return keeper
+    if len(teams) == 1:
+        return teams[0]
+
+    # Ambiguous mapping should not auto-assign the wrong team.
+    # Clear all claims for this sid and force explicit re-join.
+    sb().table("team_sessions").delete().eq("session_id", sid).execute()
+    return None
 
 
 def claim_team(team, sid):
@@ -85,10 +86,18 @@ def claim_team(team, sid):
     except Exception:
         pass
 
-    owner = sb().table("team_sessions").select("session_id").eq("team", team).limit(1).execute().data
-    if not owner:
+    # Resolve concurrent duplicates (if constraints are missing) by selecting one
+    # deterministic winner and deleting the rest.
+    owners = sb().table("team_sessions").select("session_id").eq("team", team).execute().data
+    if not owners:
         return False
-    if owner[0]["session_id"] != sid:
+
+    owner_ids = sorted({r["session_id"] for r in owners})
+    winner_sid = owner_ids[0]
+    for losing_sid in owner_ids[1:]:
+        sb().table("team_sessions").delete().eq("team", team).eq("session_id", losing_sid).execute()
+
+    if winner_sid != sid:
         return False
 
     # Keep one-team-per-session invariant (best effort) after successful claim.
