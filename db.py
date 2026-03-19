@@ -41,7 +41,20 @@ def delete_all_teams():
 # ── Sessions ───────────────────────────────────────────────────────────────────
 
 def get_sessions():
-    return {r["team"]: r["session_id"] for r in sb().table("team_sessions").select("*").execute().data}
+    rows = sb().table("team_sessions").select("team,session_id").execute().data
+    sessions = {}
+
+    # Deterministic collapse in case legacy duplicate rows exist.
+    for r in sorted(rows, key=lambda x: (x["team"], x["session_id"])):
+        team = r["team"]
+        sid = r["session_id"]
+        if team not in sessions:
+            sessions[team] = sid
+            continue
+        if sessions[team] != sid:
+            sb().table("team_sessions").delete().eq("team", team).eq("session_id", sid).execute()
+
+    return sessions
 
 
 def get_team_for_session(sid):
@@ -59,17 +72,27 @@ def get_team_for_session(sid):
 
 
 def claim_team(team, sid):
-    ex = sb().table("team_sessions").select("*").eq("team", team).execute()
-    if ex.data:
-        if ex.data[0]["session_id"] == sid:
-            # Keep one team binding per session id.
-            sb().table("team_sessions").delete().eq("session_id", sid).neq("team", team).execute()
-            return True
+    # Idempotent success if this exact claim already exists.
+    ex = sb().table("team_sessions").select("team").eq("team", team).eq("session_id", sid).execute().data
+    if ex:
+        sb().table("team_sessions").delete().eq("session_id", sid).neq("team", team).execute()
+        return True
+
+    # Insert-first strategy: first writer should win; second concurrent writer should fail
+    # under a unique constraint on `team` and then be resolved by readback below.
+    try:
+        sb().table("team_sessions").insert({"team": team, "session_id": sid}).execute()
+    except Exception:
+        pass
+
+    owner = sb().table("team_sessions").select("session_id").eq("team", team).limit(1).execute().data
+    if not owner:
+        return False
+    if owner[0]["session_id"] != sid:
         return False
 
-    # Prevent one browser/session from ending up linked to multiple teams.
-    sb().table("team_sessions").delete().eq("session_id", sid).execute()
-    sb().table("team_sessions").insert({"team": team, "session_id": sid}).execute()
+    # Keep one-team-per-session invariant (best effort) after successful claim.
+    sb().table("team_sessions").delete().eq("session_id", sid).neq("team", team).execute()
     return True
 
 
