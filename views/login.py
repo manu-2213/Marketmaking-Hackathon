@@ -68,6 +68,7 @@ def render_login(teams, sessions, session_id):
                 if st.button("Join Game →", type="primary", use_container_width=True):
                     if claim_team(chosen, session_id):
                         st.session_state["claimed_team"] = chosen
+                        st.query_params["team"] = chosen
                         st.rerun()
                     else:
                         st.error("Just claimed — pick another.")

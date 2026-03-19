@@ -4,6 +4,7 @@ import html as _html
 
 from config import MIN_SHARES
 from db import upsert_spread
+from utils import dataframe_height, format_gbp
 
 
 def _esc(s):
@@ -26,9 +27,9 @@ def render_submit(is_admin, my_team, round_num, stock, teams, spreads):
         existing = spreads.get(my_team, {})
         already = my_team in spreads
 
-        bid_val = st.number_input("📉 Bid — your buy price ($)", min_value=0.0,
+        bid_val = st.number_input("📉 Bid — your buy price (£)", min_value=0.0,
                                    value=float(existing.get("bid", 95.0)), step=0.01)
-        ask_val = st.number_input("📈 Ask — your sell price ($)", min_value=0.0,
+        ask_val = st.number_input("📈 Ask — your sell price (£)", min_value=0.0,
                                    value=float(existing.get("ask", 105.0)), step=0.01)
 
         if bid_val >= ask_val:
@@ -41,7 +42,7 @@ def render_submit(is_admin, my_team, round_num, stock, teams, spreads):
                 "border:1px solid rgba(34,211,238,.2);border-radius:14px;"
                 "padding:.9rem 1.1rem;margin:.6rem 0;font-family:JetBrains Mono,monospace;'>"
                 "<span style='color:#64748b;font-size:.7rem;font-weight:600;letter-spacing:.1em;'>SPREAD WIDTH</span><br>"
-                f"<span style='color:#22d3ee;font-size:1.3rem;font-weight:700;'>${spread_w:.2f}</span>"
+                f"<span style='color:#22d3ee;font-size:1.3rem;font-weight:700;'>{format_gbp(spread_w, decimals=2)}</span>"
                 f"{submitted_note}</p>"
             )
             st.markdown(_sw_html, unsafe_allow_html=True)
@@ -59,6 +60,7 @@ def render_submit(is_admin, my_team, round_num, stock, teams, spreads):
             rows = [{"Team": t,
                       "Status": "✅ Submitted" if t in spreads else "⏳ Waiting…",
                       "You": "👈" if t == my_team else ""} for t in sorted(teams.keys())]
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True, hide_index=True, height=dataframe_height(len(df), max_height=520))
         else:
             st.caption("No teams registered yet.")

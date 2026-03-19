@@ -5,6 +5,7 @@ Auto-refreshes every 6 seconds. No login required.
 
 import streamlit as st
 import plotly.graph_objects as go
+import pandas as pd
 
 # ── allow imports from parent dir ──────────────────────────────────────────────
 import sys, os
@@ -12,6 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from config import STARTING_BUDGET, TOTAL_ROUNDS, STOCKS
 from db import get_game_state, get_teams, get_round_history, get_trade_log
+from utils import dataframe_height, format_gbp, team_cash_signature
 
 # ── page config ────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Live Scoreboard", layout="wide", page_icon="🏆",
@@ -77,6 +79,8 @@ history = get_round_history()
 all_trades = get_trade_log()
 stock = STOCKS[round_num - 1] if round_num <= len(STOCKS) else STOCKS[-1]
 _stock_display = stock.upper().replace("_", " ")
+total_teams = len(teams)
+completed_trades = sum(1 for trade in all_trades if trade.get("qty", 0) > 0)
 
 # ── Phase color ────────────────────────────────────────────────────────────────
 _pc = {"submit": "#22d3ee", "trade": "#fbbf24", "reveal": "#34d399"}.get(phase, "#fbbf24")
@@ -150,33 +154,91 @@ ranked = sorted(team_names, key=lambda n: cash_pnl[n], reverse=True)
 medals = ["🥇", "🥈", "🥉"]
 
 if ranked:
-    cards_html = "<p style='display:flex;justify-content:center;gap:1.2rem;flex-wrap:wrap;margin:.2rem 0 1rem;'>"
-    for i, name in enumerate(ranked):
+    leader = ranked[0]
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Leader", leader)
+    m2.metric("Leader P&L", format_gbp(cash_pnl[leader], signed=True))
+    m3.metric("Teams / Trades", f"{total_teams} / {completed_trades}")
+
+    cards_html = "<p style='display:flex;justify-content:center;gap:1.2rem;flex-wrap:wrap;margin:.4rem 0 1.2rem;'>"
+    for i, name in enumerate(ranked[:6]):
         pnl = cash_pnl[name]
         col = TEAM_COLORS[i % len(TEAM_COLORS)]
         pnl_color = "#34d399" if pnl >= 0 else "#fb7185"
         medal = medals[i] if i < 3 else f"#{i+1}"
         glow = f"box-shadow:0 0 24px {col}35,inset 0 1px 0 {col}25;" if i < 3 else ""
         scale = "transform:scale(1.08);" if i == 0 else ""
+        min_width = "240px" if i < 3 else "210px"
+        padding = "1.4rem 1.8rem" if i < 3 else "1.15rem 1.45rem"
         cards_html += (
             f"<span style='display:inline-block;background:linear-gradient(135deg,#111827,#1a2332);"
             f"border:1px solid {col}40;border-radius:18px;"
-            f"padding:1rem 1.6rem;min-width:150px;text-align:center;{glow}{scale}"
+            f"padding:{padding};min-width:{min_width};text-align:center;{glow}{scale}"
             f"animation:float-up .5s ease {i*0.08}s both;'>"
-            f"<span style='display:block;font-size:1.8rem;margin-bottom:.15rem;'>{medal}</span>"
-            f"<span style='display:block;font-family:JetBrains Mono,monospace;font-size:1.15rem;"
+            f"<span style='display:block;font-size:{'2.4rem' if i < 3 else '1.8rem'};margin-bottom:.15rem;'>{medal}</span>"
+            f"<span style='display:block;font-family:JetBrains Mono,monospace;font-size:{'1.65rem' if i < 3 else '1.15rem'};"
             f"font-weight:800;color:{col};margin-bottom:.3rem;'>{name}</span>"
-            f"<span style='display:block;font-family:JetBrains Mono,monospace;font-size:1.5rem;"
-            f"font-weight:700;color:{pnl_color};'>${pnl:+,.0f}</span>"
+            f"<span style='display:block;font-family:JetBrains Mono,monospace;font-size:{'2.2rem' if i < 3 else '1.5rem'};"
+            f"font-weight:700;color:{pnl_color};'>{format_gbp(pnl, signed=True)}</span>"
             "</span>"
         )
     cards_html += "</p>"
     st.markdown(cards_html, unsafe_allow_html=True)
 
+    standings_rows = [
+        {
+            "Rank": position,
+            "Team": name,
+            "Cash": format_gbp(teams[name]["cash"]),
+            "P&L": format_gbp(cash_pnl[name], signed=True),
+        }
+        for position, name in enumerate(ranked, start=1)
+    ]
+
+    left, right = st.columns([1.35, 1], gap="large")
+    with left:
+        st.markdown(
+            "<p style='font-family:JetBrains Mono,monospace;font-size:1rem;font-weight:800;"
+            "letter-spacing:.16em;color:#94a3b8;text-transform:uppercase;margin:.4rem 0 1rem;'>"
+            "Top 12 Standings</p>",
+            unsafe_allow_html=True,
+        )
+        board_html = "<div style='display:grid;gap:.75rem;'>"
+        for row in standings_rows[:12]:
+            pnl_color = "#34d399" if not row["P&L"].startswith("-") else "#fb7185"
+            board_html += (
+                "<div style='display:grid;grid-template-columns:90px 1.8fr 1fr 1fr;align-items:center;"
+                "gap:1rem;background:linear-gradient(135deg,#111827,#1a2332);border:1px solid #243044;"
+                "border-radius:18px;padding:1rem 1.2rem;'>"
+                f"<span style='font-family:JetBrains Mono,monospace;font-size:1.6rem;font-weight:900;color:#64748b;'>#{row['Rank']}</span>"
+                f"<span style='font-family:JetBrains Mono,monospace;font-size:1.5rem;font-weight:800;color:#f1f5f9;'>{row['Team']}</span>"
+                f"<span style='font-family:JetBrains Mono,monospace;font-size:1.35rem;font-weight:700;color:#22d3ee;text-align:right;'>{row['Cash']}</span>"
+                f"<span style='font-family:JetBrains Mono,monospace;font-size:1.35rem;font-weight:800;color:{pnl_color};text-align:right;'>{row['P&L']}</span>"
+                "</div>"
+            )
+        board_html += "</div>"
+        st.markdown(board_html, unsafe_allow_html=True)
+
+    with right:
+        st.markdown(
+            "<p style='font-family:JetBrains Mono,monospace;font-size:1rem;font-weight:800;"
+            "letter-spacing:.16em;color:#94a3b8;text-transform:uppercase;margin:.4rem 0 1rem;'>"
+            "Full Field</p>",
+            unsafe_allow_html=True,
+        )
+        full_df = pd.DataFrame(standings_rows)
+        st.dataframe(
+            full_df,
+            use_container_width=True,
+            hide_index=True,
+            height=dataframe_height(len(full_df), row_px=35, max_height=760),
+        )
+
 # ── P&L chart ─────────────────────────────────────────────────────────────────
 if len(chart_rounds) > 1:
     fig = go.Figure()
-    for i, name in enumerate(ranked):
+    chart_names = ranked[: min(10, len(ranked))]
+    for i, name in enumerate(chart_names):
         col = TEAM_COLORS[i % len(TEAM_COLORS)]
         fig.add_trace(go.Scatter(
             x=chart_rounds,
@@ -185,7 +247,8 @@ if len(chart_rounds) > 1:
             mode="lines+markers",
             line=dict(color=col, width=3.5, shape="spline", smoothing=1.2),
             marker=dict(size=9, color=col, line=dict(width=2, color="#06080f")),
-            hovertemplate=f"<b>{name}</b><br>Round %{{x}}<br>P&L: $%{{y:+,.0f}}<extra></extra>",
+            customdata=[format_gbp(value, signed=True) for value in chart_pnl[name]],
+            hovertemplate=f"<b>{name}</b><br>Round %{{x}}<br>P&L: %{{customdata}}<extra></extra>",
         ))
 
     fig.add_hline(y=0, line_dash="dot", line_color="rgba(51,65,85,.5)", line_width=1)
@@ -206,11 +269,11 @@ if len(chart_rounds) > 1:
             tickfont=dict(size=14, family="JetBrains Mono, monospace"),
         ),
         yaxis=dict(
-            title=dict(text="P&L ($)", font=dict(size=14, color="#64748b")),
+            title=dict(text="P&L (£)", font=dict(size=14, color="#64748b")),
             gridcolor="rgba(42,58,80,.3)",
             zerolinecolor="rgba(42,58,80,.6)",
             tickfont=dict(size=14, family="JetBrains Mono, monospace"),
-            tickprefix="$",
+            tickprefix="£",
             separatethousands=True,
         ),
         legend=dict(
@@ -228,6 +291,7 @@ if len(chart_rounds) > 1:
             font=dict(size=14, family="JetBrains Mono, monospace"),
         ),
     )
+    st.caption(f"Trend chart shows the top {len(chart_names)} teams by current P&L to keep the screen readable.")
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 else:
     st.markdown(
@@ -258,8 +322,7 @@ def _auto_refresh():
         latest["round"] != round_num
         or latest["phase"] != phase
         or latest["game_over"] != game_over
-        or set(latest_teams.keys()) != set(teams.keys())
-        or any(latest_teams[n]["cash"] != teams[n]["cash"] for n in teams if n in latest_teams)
+        or team_cash_signature(latest_teams) != team_cash_signature(teams)
     )
     if changed:
         st.rerun()

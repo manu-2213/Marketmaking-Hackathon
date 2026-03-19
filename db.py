@@ -44,10 +44,31 @@ def get_sessions():
     return {r["team"]: r["session_id"] for r in sb().table("team_sessions").select("*").execute().data}
 
 
+def get_team_for_session(sid):
+    rows = sb().table("team_sessions").select("team").eq("session_id", sid).execute().data
+    if not rows:
+        return None
+
+    # Defensive normalization: if stale duplicate bindings exist for one session,
+    # keep a deterministic team and clear the others.
+    teams = sorted({r["team"] for r in rows})
+    keeper = teams[0]
+    for stale_team in teams[1:]:
+        sb().table("team_sessions").delete().eq("team", stale_team).eq("session_id", sid).execute()
+    return keeper
+
+
 def claim_team(team, sid):
     ex = sb().table("team_sessions").select("*").eq("team", team).execute()
     if ex.data:
-        return ex.data[0]["session_id"] == sid
+        if ex.data[0]["session_id"] == sid:
+            # Keep one team binding per session id.
+            sb().table("team_sessions").delete().eq("session_id", sid).neq("team", team).execute()
+            return True
+        return False
+
+    # Prevent one browser/session from ending up linked to multiple teams.
+    sb().table("team_sessions").delete().eq("session_id", sid).execute()
     sb().table("team_sessions").insert({"team": team, "session_id": sid}).execute()
     return True
 
@@ -76,8 +97,8 @@ def upsert_position(team, stk, dq, dc):
 
 
 def update_cash(team, delta):
-    teams = get_teams()
-    sb().table("teams").update({"cash": teams[team]["cash"] + delta}).eq("name", team).execute()
+    current = sb().table("teams").select("cash").eq("name", team).single().execute().data
+    sb().table("teams").update({"cash": current["cash"] + delta}).eq("name", team).execute()
 
 
 # ── Spreads ────────────────────────────────────────────────────────────────────

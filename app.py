@@ -3,7 +3,8 @@ import uuid
 from pathlib import Path
 
 from config import STOCKS, TOTAL_ROUNDS
-from db import get_game_state, get_teams, get_sessions, get_spreads, get_true_prices, get_positions
+from db import get_game_state, get_teams, get_sessions, get_spreads, get_true_prices, get_positions, get_team_for_session
+from utils import spread_signature, team_cash_signature
 from views import (
     render_login, render_sidebar, render_header,
     render_admin, render_submit, render_trade, render_reveal,
@@ -23,7 +24,19 @@ _css = (Path(__file__).parent / "styles.css").read_text()
 st.markdown(f"<style>{_css}</style>", unsafe_allow_html=True)
 
 # ── Session state ──────────────────────────────────────────────────────────────
-if "session_id"   not in st.session_state: st.session_state["session_id"]   = str(uuid.uuid4())
+if "session_id" not in st.session_state:
+    # Keep a stable browser identity across full page reloads.
+    sid_from_url = st.query_params.get("sid")
+    if sid_from_url:
+        st.session_state["session_id"] = sid_from_url
+    else:
+        st.session_state["session_id"] = str(uuid.uuid4())
+        st.query_params["sid"] = st.session_state["session_id"]
+else:
+    # Ensure the URL keeps tracking the current session identity.
+    if st.query_params.get("sid") != st.session_state["session_id"]:
+        st.query_params["sid"] = st.session_state["session_id"]
+
 if "claimed_team" not in st.session_state: st.session_state["claimed_team"] = None
 if "is_admin"     not in st.session_state: st.session_state["is_admin"]     = False
 SESSION_ID = st.session_state["session_id"]
@@ -40,17 +53,24 @@ sessions     = get_sessions()
 spreads      = get_spreads(round_num)
 true_prices  = get_true_prices()
 positions    = get_positions()
+team_state   = team_cash_signature(teams)
+spread_state = spread_signature(spreads)
 
 my_team  = st.session_state["claimed_team"]
 is_admin = st.session_state["is_admin"]
 
 # Re-associate session if browser refreshed
 if not is_admin and my_team is None:
-    for team, sid in sessions.items():
-        if sid == SESSION_ID:
-            my_team = team
-            st.session_state["claimed_team"] = team
-            break
+    hinted_team = st.query_params.get("team")
+    if hinted_team and sessions.get(hinted_team) == SESSION_ID:
+        my_team = hinted_team
+        st.session_state["claimed_team"] = hinted_team
+    else:
+        matched_team = get_team_for_session(SESSION_ID)
+        if matched_team:
+            my_team = matched_team
+            st.session_state["claimed_team"] = matched_team
+            st.query_params["team"] = matched_team
 
 # ── Login gate ─────────────────────────────────────────────────────────────────
 if not is_admin and my_team is None:
@@ -124,8 +144,8 @@ if not game_over:
             or latest_gs["round"] != round_num
             or latest_gs["game_over"] != game_over
             or latest_gs["market_maker"] != market_maker
-            or len(latest_spreads) != len(spreads)
-            or len(latest_teams) != len(teams)
+            or spread_signature(latest_spreads) != spread_state
+            or team_cash_signature(latest_teams) != team_state
         )
         if changed:
             st.rerun(scope="app")

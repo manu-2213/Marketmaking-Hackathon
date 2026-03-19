@@ -3,6 +3,7 @@ import html as _html
 
 from config import STARTING_BUDGET, TOTAL_ROUNDS
 from db import release_team
+from utils import format_gbp
 
 
 def _esc(s):
@@ -36,12 +37,12 @@ def render_sidebar(is_admin, my_team, teams, positions, round_num, stock, phase)
                         <div>
                             <div style='font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>Cash</div>
                             <div style='font-family:JetBrains Mono,monospace;font-size:1.5rem;font-weight:700;
-                                        color:{"#34d399" if cash>=0 else "#fb7185"};margin-top:.2rem;'>${cash:,.0f}</div>
+                                        color:{"#34d399" if cash>=0 else "#fb7185"};margin-top:.2rem;'>{format_gbp(cash)}</div>
                         </div>
                         <div style='text-align:right;'>
                             <div style='font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>P&L</div>
                             <div style='font-family:JetBrains Mono,monospace;font-size:1.1rem;font-weight:600;
-                                        color:{pnl_color};margin-top:.2rem;'>${pnl:+,.0f}</div>
+                                        color:{pnl_color};margin-top:.2rem;'>{format_gbp(pnl, signed=True)}</div>
                         </div>
                     </div>
                     <div style='height:3px;border-radius:2px;background:#1f2b3d;overflow:hidden;'>
@@ -72,6 +73,7 @@ def render_sidebar(is_admin, my_team, teams, positions, round_num, stock, phase)
             if st.button("🚪 Leave team", use_container_width=True):
                 release_team(my_team)
                 st.session_state["claimed_team"] = None
+                st.query_params.pop("team", None)
                 st.rerun()
 
         st.markdown("---")

@@ -1,12 +1,13 @@
 import streamlit as st
 import pandas as pd
 
-from config import STOCKS, TOTAL_ROUNDS
+from config import STOCKS, TOTAL_ROUNDS, MAX_TEAMS
 from db import (
     get_teams, get_sessions, add_team, delete_all_teams, release_team,
     get_trade_log, set_game_state, set_true_price, settle_round, log_round, reset_game,
 )
 from game import find_market_maker
+from utils import dataframe_height, format_gbp
 
 
 def render_admin(round_num, stock, phase, spreads, teams, market_maker, true_prices):
@@ -42,12 +43,15 @@ def _render_teams_tab():
     c1, c2 = st.columns([1, 2])
 
     with c1:
+        st.caption(f"Teams: {len(_teams)} / {MAX_TEAMS}")
         with st.form("add_team_form", clear_on_submit=True):
             new_team = st.text_input("", placeholder="Team name…", label_visibility="collapsed")
             submitted = st.form_submit_button("➕ Add Team", type="primary", use_container_width=True)
             if submitted:
                 if new_team.strip():
-                    if new_team.strip() not in _teams:
+                    if len(_teams) >= MAX_TEAMS:
+                        st.warning(f"Team limit reached ({MAX_TEAMS}).")
+                    elif new_team.strip() not in _teams:
                         add_team(new_team.strip())
                         st.toast(f"✅ Added {new_team.strip()}")
                     else:
@@ -58,8 +62,9 @@ def _render_teams_tab():
     with c2:
         if _teams:
             rows = [{"Team": t, "Status": "🟢 Online" if t in _sessions else "⚪ Not joined",
-                      "Cash": f"${_teams[t]['cash']:,.0f}"} for t in sorted(_teams.keys())]
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                      "Cash": format_gbp(_teams[t]["cash"])} for t in sorted(_teams.keys())]
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True, hide_index=True, height=dataframe_height(len(df), max_height=520))
         else:
             st.info("No teams yet.")
 
@@ -102,9 +107,10 @@ def _render_phase_tab(round_num, stock, phase, spreads, teams, market_maker, tru
 
     if phase == "submit":
         if spreads:
-            rows = [{"Team": t, "Bid": f"${s['bid']:.2f}", "Ask": f"${s['ask']:.2f}",
-                      "Spread": f"${s['ask']-s['bid']:.2f}"} for t, s in spreads.items()]
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            rows = [{"Team": t, "Bid": format_gbp(s["bid"], decimals=2), "Ask": format_gbp(s["ask"], decimals=2),
+                      "Spread": format_gbp(s["ask"] - s["bid"], decimals=2)} for t, s in spreads.items()]
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True, hide_index=True, height=dataframe_height(len(df), max_height=460))
         else:
             st.info("Waiting for teams to submit spreads.")
         if st.button("⏩ Close Submissions & Open Trading", type="primary", use_container_width=True):
@@ -123,11 +129,11 @@ def _render_phase_tab(round_num, stock, phase, spreads, teams, market_maker, tru
         if real_trades:
             df_t = pd.DataFrame(real_trades)[["buyer", "seller", "price", "qty", "executed_at"]]
             df_t.columns = ["Buyer", "Seller", "Price", "Qty", "Time"]
-            df_t["Price"] = df_t["Price"].apply(lambda v: f"${v:.2f}")
+            df_t["Price"] = df_t["Price"].apply(lambda v: format_gbp(v, decimals=2))
             df_t["Time"] = df_t["Time"].apply(lambda v: str(v)[-15:-7] if v else "")
-            st.dataframe(df_t, use_container_width=True, hide_index=True)
+            st.dataframe(df_t, use_container_width=True, hide_index=True, height=dataframe_height(len(df_t), max_height=420))
         st.markdown("---")
-        true_p = st.number_input("True price ($)", min_value=0.0, value=100.0, step=0.01)
+        true_p = st.number_input("True price (£)", min_value=0.0, value=100.0, step=0.01)
         if st.button("✅ Reveal True Price & Settle All Positions", type="primary", use_container_width=True):
             set_true_price(stock, true_p)
             settle_round(round_num, stock, true_p)
@@ -136,7 +142,7 @@ def _render_phase_tab(round_num, stock, phase, spreads, teams, market_maker, tru
 
     elif phase == "reveal":
         tp = true_prices.get(stock)
-        st.success(f"True price: **${tp:.2f}**" if tp else "True price set.")
+        st.success(f"True price: **{format_gbp(tp, decimals=2)}**" if tp else "True price set.")
         st.info("All positions settled to cash at the true price.")
         st.markdown("---")
         if round_num < TOTAL_ROUNDS:

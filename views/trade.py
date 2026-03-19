@@ -5,6 +5,7 @@ import html as _html
 from config import MIN_SHARES
 from db import has_traded_this_round, get_trade_log
 from game import execute_trade
+from utils import dataframe_height, format_gbp
 
 
 def _esc(s):
@@ -34,17 +35,17 @@ def render_trade(is_admin, my_team, market_maker, round_num, stock, teams, sprea
             <div style='background:rgba(52,211,153,.06);border:1px solid rgba(52,211,153,.15);
                         border-radius:12px;padding:.65rem 1rem;min-width:100px;'>
                 <div style='font-size:.55rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>BID</div>
-                <div style='font-family:JetBrains Mono,monospace;font-size:1.3rem;font-weight:700;color:#34d399;margin-top:.15rem;'>${mm_bid:.2f}</div>
+                <div style='font-family:JetBrains Mono,monospace;font-size:1.3rem;font-weight:700;color:#34d399;margin-top:.15rem;'>{format_gbp(mm_bid, decimals=2)}</div>
             </div>
             <div style='background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.15);
                         border-radius:12px;padding:.65rem 1rem;min-width:100px;'>
                 <div style='font-size:.55rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>ASK</div>
-                <div style='font-family:JetBrains Mono,monospace;font-size:1.3rem;font-weight:700;color:#22d3ee;margin-top:.15rem;'>${mm_ask:.2f}</div>
+                <div style='font-family:JetBrains Mono,monospace;font-size:1.3rem;font-weight:700;color:#22d3ee;margin-top:.15rem;'>{format_gbp(mm_ask, decimals=2)}</div>
             </div>
             <div style='background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);
                         border-radius:12px;padding:.65rem 1rem;min-width:100px;'>
                 <div style='font-size:.55rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>SPREAD</div>
-                <div style='font-family:JetBrains Mono,monospace;font-size:1.3rem;font-weight:700;color:#fbbf24;margin-top:.15rem;'>${mm_ask-mm_bid:.2f}</div>
+                <div style='font-family:JetBrains Mono,monospace;font-size:1.3rem;font-weight:700;color:#fbbf24;margin-top:.15rem;'>{format_gbp(mm_ask - mm_bid, decimals=2)}</div>
             </div>
         </div>
     </div>
@@ -114,7 +115,7 @@ def _render_trade_form(my_team, market_maker, round_num, stock, teams, mm_bid, m
         <div style='display:grid;grid-template-columns:1fr 1fr;gap:.75rem;'>
             <div>
                 <div style='font-size:.6rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>Price / Share</div>
-                <div style='font-size:1.05rem;color:#f1f5f9;font-weight:700;margin-top:.2rem;'>${price:.2f}</div>
+                <div style='font-size:1.05rem;color:#f1f5f9;font-weight:700;margin-top:.2rem;'>{format_gbp(price, decimals=2)}</div>
             </div>
             <div>
                 <div style='font-size:.6rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>Shares</div>
@@ -122,18 +123,18 @@ def _render_trade_form(my_team, market_maker, round_num, stock, teams, mm_bid, m
             </div>
             <div>
                 <div style='font-size:.6rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>Total {"Cost" if is_buy else "Proceeds"}</div>
-                <div style='font-size:1.15rem;color:{"#fb7185" if is_buy else "#34d399"};font-weight:700;margin-top:.2rem;'>${total_cost:,.0f}</div>
+                <div style='font-size:1.15rem;color:{"#fb7185" if is_buy else "#34d399"};font-weight:700;margin-top:.2rem;'>{format_gbp(total_cost)}</div>
             </div>
             <div>
                 <div style='font-size:.6rem;color:#64748b;text-transform:uppercase;letter-spacing:.12em;font-weight:600;'>Cash After</div>
-                <div style='font-size:1.15rem;color:{"#34d399" if cash_after>=0 else "#fb7185"};font-weight:700;margin-top:.2rem;'>${cash_after:,.0f}</div>
+                <div style='font-size:1.15rem;color:{"#34d399" if cash_after>=0 else "#fb7185"};font-weight:700;margin-top:.2rem;'>{format_gbp(cash_after)}</div>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     if is_buy and my_cash < total_cost:
-        st.error(f"Insufficient funds. You have ${my_cash:,.0f}")
+        st.error(f"Insufficient funds. You have {format_gbp(my_cash)}")
         return
 
     # Two-step confirmation
@@ -143,14 +144,17 @@ def _render_trade_form(my_team, market_maker, round_num, stock, teams, mm_bid, m
 
     if not st.session_state[confirm_key]:
         if st.button(
-            f"{'🟢 BUY' if is_buy else '🔴 SELL'} {qty} shares @ ${price:.2f} = ${total_cost:,.0f}",
+            f"{'🟢 BUY' if is_buy else '🔴 SELL'} {qty} shares @ {format_gbp(price, decimals=2)} = {format_gbp(total_cost)}",
             type="primary", use_container_width=True,
         ):
             st.session_state[confirm_key] = {"is_buy": is_buy, "qty": qty, "price": price, "total": total_cost}
             st.rerun()
     else:
         pending = st.session_state[confirm_key]
-        st.warning(f"⚠️ Confirm: {'BUY' if pending['is_buy'] else 'SELL'} {pending['qty']} shares @ ${pending['price']:.2f} for ${pending['total']:,.0f}?")
+        st.warning(
+            f"⚠️ Confirm: {'BUY' if pending['is_buy'] else 'SELL'} {pending['qty']} shares @ "
+            f"{format_gbp(pending['price'], decimals=2)} for {format_gbp(pending['total'])}?"
+        )
         col_yes, col_no = st.columns(2)
         with col_yes:
             if st.button("✅ Confirm", type="primary", use_container_width=True):
@@ -180,8 +184,8 @@ def _render_trade_log(round_num):
     if real_trades:
         df_t = pd.DataFrame(real_trades)[["buyer", "seller", "price", "qty", "executed_at"]]
         df_t.columns = ["Buyer", "Seller", "Price", "Qty", "Time"]
-        df_t["Price"] = df_t["Price"].apply(lambda v: f"${v:.2f}")
+        df_t["Price"] = df_t["Price"].apply(lambda v: format_gbp(v, decimals=2))
         df_t["Time"] = df_t["Time"].apply(lambda v: str(v)[-15:-7] if v else "")
-        st.dataframe(df_t, use_container_width=True, hide_index=True)
+        st.dataframe(df_t, use_container_width=True, hide_index=True, height=dataframe_height(len(df_t), max_height=420))
     else:
         st.markdown("<p style='color:#64748b;font-size:.85rem;'>No trades yet this round.</p>", unsafe_allow_html=True)

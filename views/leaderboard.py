@@ -3,6 +3,7 @@ import pandas as pd
 
 from config import STARTING_BUDGET
 from db import get_trade_log, get_round_history, reset_game
+from utils import dataframe_height, format_gbp
 
 
 def render_game_over(teams, is_admin):
@@ -20,10 +21,16 @@ def render_game_over(teams, is_admin):
     rows = []
     for n in teams:
         t = teams[n]["cash"]
-        rows.append({"Rank": "", "Team": n, "Final Cash": f"${t:,.0f}", "P&L": f"${t-STARTING_BUDGET:+,.0f}"})
-    df = pd.DataFrame(rows).sort_values("Final Cash", ascending=False).reset_index(drop=True)
+        rows.append({
+            "Rank": "",
+            "Team": n,
+            "Final Cash": format_gbp(t),
+            "P&L": format_gbp(t - STARTING_BUDGET, signed=True),
+            "_sort_cash": t,
+        })
+    df = pd.DataFrame(rows).sort_values("_sort_cash", ascending=False).drop(columns=["_sort_cash"]).reset_index(drop=True)
     df["Rank"] = ["🥇", "🥈", "🥉"] + [""] * (max(0, len(df) - 3))
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, use_container_width=True, hide_index=True, height=dataframe_height(len(df), max_height=560))
 
     if is_admin and st.button("🔄 Reset Game", use_container_width=True):
         reset_game()
@@ -53,15 +60,15 @@ def render_leaderboard(my_team, market_maker, teams, round_num, phase, game_over
         rows.append({
             "": "🏦" if name == market_maker else "",
             "Team": name,
-            "Cash": f"${cash:,.0f}",
-            "P&L": f"${pnl:+,.0f}",
+            "Cash": format_gbp(cash),
+            "P&L": format_gbp(pnl, signed=True),
             "You": "👈" if name == my_team else "",
             "_sort_cash": cash,
         })
     lb = sorted(rows, key=lambda r: r["_sort_cash"], reverse=True)
     lb_df = pd.DataFrame(lb).drop(columns=["_sort_cash"]).reset_index(drop=True)
     lb_df.index += 1
-    st.dataframe(lb_df, use_container_width=True)
+    st.dataframe(lb_df, use_container_width=True, height=dataframe_height(len(lb_df), max_height=560))
 
     # History + chart
     history = get_round_history()
@@ -89,12 +96,12 @@ def render_leaderboard(my_team, market_maker, teams, round_num, phase, game_over
                 st.line_chart(chart_df, use_container_width=True)
 
         with st.expander("📋 Round History"):
-            st.dataframe(hist_df, use_container_width=True, hide_index=True)
+            st.dataframe(hist_df, use_container_width=True, hide_index=True, height=dataframe_height(len(hist_df), max_height=420))
 
     all_trades = get_trade_log()
     if all_trades:
         with st.expander("📜 Full Trade Log"):
             df_all = pd.DataFrame(all_trades)[["round", "stock", "buyer", "seller", "price", "qty", "executed_at"]]
             df_all.columns = ["Round", "Stock", "Buyer", "Seller", "Price", "Qty", "Time"]
-            df_all["Price"] = df_all["Price"].apply(lambda v: f"${v:.2f}")
-            st.dataframe(df_all, use_container_width=True, hide_index=True)
+            df_all["Price"] = df_all["Price"].apply(lambda v: format_gbp(v, decimals=2))
+            st.dataframe(df_all, use_container_width=True, hide_index=True, height=dataframe_height(len(df_all), max_height=460))
