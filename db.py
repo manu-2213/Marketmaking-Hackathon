@@ -116,21 +116,61 @@ def get_positions():
 
 
 def upsert_position(team, stk, dq, dc):
-    r = sb().table("positions").select("*").eq("team", team).eq("stock", stk).execute()
-    if r.data:
-        row = r.data[0]
-        sb().table("positions").update(
-            {"qty": row["qty"] + dq, "cost_basis": row["cost_basis"] + dc}
-        ).eq("id", row["id"]).execute()
-    else:
-        sb().table("positions").insert(
-            {"team": team, "stock": stk, "qty": dq, "cost_basis": dc}
-        ).execute()
+    max_retries = 10
+    for _ in range(max_retries):
+        rows = sb().table("positions").select("*").eq("team", team).eq("stock", stk).execute().data
+
+        # Defensive repair: collapse duplicate rows for same (team, stock).
+        if len(rows) > 1:
+            rows = sorted(rows, key=lambda r: r["id"])
+            keeper = rows[0]
+            total_qty = sum(r.get("qty", 0) for r in rows)
+            total_cb = sum(r.get("cost_basis", 0) for r in rows)
+            sb().table("positions").update(
+                {"qty": total_qty, "cost_basis": total_cb}
+            ).eq("id", keeper["id"]).execute()
+            for extra in rows[1:]:
+                sb().table("positions").delete().eq("id", extra["id"]).execute()
+            continue
+
+        if len(rows) == 1:
+            row = rows[0]
+            new_qty = row["qty"] + dq
+            new_cb = row["cost_basis"] + dc
+            res = sb().table("positions").update(
+                {"qty": new_qty, "cost_basis": new_cb}
+            ).eq("id", row["id"]).eq("qty", row["qty"]).eq("cost_basis", row["cost_basis"]).select("id").execute()
+            if res.data:
+                return
+            continue
+
+        try:
+            sb().table("positions").insert(
+                {"team": team, "stock": stk, "qty": dq, "cost_basis": dc}
+            ).execute()
+            return
+        except Exception:
+            # Another concurrent insert may have won; retry with read path.
+            continue
+
+    raise RuntimeError(f"Could not update position for team={team}, stock={stk} after retries")
 
 
 def update_cash(team, delta):
-    current = sb().table("teams").select("cash").eq("name", team).single().execute().data
-    sb().table("teams").update({"cash": current["cash"] + delta}).eq("name", team).execute()
+    max_retries = 10
+    for _ in range(max_retries):
+        current = sb().table("teams").select("cash").eq("name", team).single().execute().data
+        current_cash = current["cash"]
+        new_cash = current_cash + delta
+
+        # Compare-and-swap update to avoid lost writes under concurrent trades.
+        res = sb().table("teams").update(
+            {"cash": new_cash}
+        ).eq("name", team).eq("cash", current_cash).select("cash").execute()
+        if res.data:
+            return
+
+    raise RuntimeError(f"Could not update cash for team={team} after retries")
 
 
 # ── Spreads ────────────────────────────────────────────────────────────────────

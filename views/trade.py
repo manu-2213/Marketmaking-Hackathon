@@ -158,12 +158,15 @@ def _render_trade_form(my_team, market_maker, round_num, stock, teams, mm_bid, m
         col_yes, col_no = st.columns(2)
         with col_yes:
             if st.button("✅ Confirm", type="primary", use_container_width=True):
-                if pending["is_buy"]:
-                    execute_trade(my_team, market_maker, stock, pending["price"], pending["qty"], round_num)
-                else:
-                    execute_trade(market_maker, my_team, stock, pending["price"], pending["qty"], round_num)
-                st.session_state[confirm_key] = False
-                st.rerun()
+                try:
+                    if pending["is_buy"]:
+                        execute_trade(my_team, market_maker, stock, pending["price"], pending["qty"], round_num)
+                    else:
+                        execute_trade(market_maker, my_team, stock, pending["price"], pending["qty"], round_num)
+                    st.session_state[confirm_key] = False
+                    st.rerun()
+                except Exception:
+                    st.error("Trade could not be completed due to concurrent updates. Please try again.")
         with col_no:
             if st.button("❌ Cancel", use_container_width=True):
                 st.session_state[confirm_key] = False
