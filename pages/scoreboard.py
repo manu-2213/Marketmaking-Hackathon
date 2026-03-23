@@ -149,6 +149,14 @@ if history:
 
 cash_pnl = {n: teams[n]["cash"] - STARTING_BUDGET for n in team_names}
 
+# ── Last round P&L (change in current round only) ─────────────────────────────
+last_round_pnl = {}
+for n in team_names:
+    if len(chart_pnl[n]) > 1:
+        last_round_pnl[n] = chart_pnl[n][-1] - chart_pnl[n][-2]
+    else:
+        last_round_pnl[n] = chart_pnl[n][-1] if chart_pnl[n] else 0
+
 # ── Ranking cards ──────────────────────────────────────────────────────────────
 ranked = sorted(team_names, key=lambda n: cash_pnl[n], reverse=True)
 medals = ["🥇", "🥈", "🥉"]
@@ -157,170 +165,70 @@ if ranked:
     leader = ranked[0]
     m1, m2, m3 = st.columns(3)
     m1.metric("Leader", leader)
-    m2.metric("Leader P&L", format_gbp(cash_pnl[leader], signed=True))
+    m2.metric("Leader Cumul. P&L", format_gbp(cash_pnl[leader], signed=True))
     m3.metric("Teams / Trades", f"{total_teams} / {completed_trades}")
 
-    cards_html = "<p style='display:flex;justify-content:center;gap:1.2rem;flex-wrap:wrap;margin:.4rem 0 1.2rem;'>"
+    # ── Compact top 6 medal cards ────────────────────────────────────────────────
+    cards_html = "<p style='display:flex;justify-content:center;gap:0.8rem;flex-wrap:wrap;margin:.3rem 0 .8rem;'>"
     for i, name in enumerate(ranked[:6]):
-        pnl = cash_pnl[name]
+        total_pnl = cash_pnl[name]
         col = TEAM_COLORS[i % len(TEAM_COLORS)]
-        pnl_color = "#34d399" if pnl >= 0 else "#fb7185"
+        pnl_color = "#34d399" if total_pnl >= 0 else "#fb7185"
         medal = medals[i] if i < 3 else f"#{i+1}"
-        glow = f"box-shadow:0 0 24px {col}35,inset 0 1px 0 {col}25;" if i < 3 else ""
-        scale = "transform:scale(1.08);" if i == 0 else ""
-        min_width = "240px" if i < 3 else "210px"
-        padding = "1.4rem 1.8rem" if i < 3 else "1.15rem 1.45rem"
+        glow = f"box-shadow:0 0 16px {col}35;" if i < 3 else ""
+        scale = "transform:scale(1.05);" if i == 0 else ""
+        min_width = "160px" if i < 3 else "140px"
+        padding = "0.9rem 1rem" if i < 3 else "0.7rem 0.85rem"
+        font_sizes = {
+            'medal': '2rem' if i < 3 else '1.4rem',
+            'name': '1.1rem' if i < 3 else '0.9rem',
+            'pnl': '1.4rem' if i < 3 else '1rem'
+        }
         cards_html += (
             f"<span style='display:inline-block;background:linear-gradient(135deg,#111827,#1a2332);"
-            f"border:1px solid {col}40;border-radius:18px;"
+            f"border:1px solid {col}40;border-radius:12px;"
             f"padding:{padding};min-width:{min_width};text-align:center;{glow}{scale}"
             f"animation:float-up .5s ease {i*0.08}s both;'>"
-            f"<span style='display:block;font-size:{'2.4rem' if i < 3 else '1.8rem'};margin-bottom:.15rem;'>{medal}</span>"
-            f"<span style='display:block;font-family:JetBrains Mono,monospace;font-size:{'1.65rem' if i < 3 else '1.15rem'};"
-            f"font-weight:800;color:{col};margin-bottom:.3rem;'>{name}</span>"
-            f"<span style='display:block;font-family:JetBrains Mono,monospace;font-size:{'2.2rem' if i < 3 else '1.5rem'};"
-            f"font-weight:700;color:{pnl_color};'>{format_gbp(pnl, signed=True)}</span>"
+            f"<span style='display:block;font-size:{font_sizes['medal']};margin-bottom:.08rem;'>{medal}</span>"
+            f"<span style='display:block;font-family:JetBrains Mono,monospace;font-size:{font_sizes['name']};"
+            f"font-weight:700;color:{col};margin-bottom:.2rem;overflow:hidden;text-overflow:ellipsis;'>{name}</span>"
+            f"<span style='display:block;font-family:JetBrains Mono,monospace;font-size:{font_sizes['pnl']};"
+            f"font-weight:700;color:{pnl_color};'>{format_gbp(total_pnl, signed=True)}</span>"
             "</span>"
         )
     cards_html += "</p>"
     st.markdown(cards_html, unsafe_allow_html=True)
 
-    standings_rows = [
-        {
-            "Rank": position,
-            "Team": name,
-            "Cash": format_gbp(teams[name]["cash"]),
-            "P&L": format_gbp(cash_pnl[name], signed=True),
-        }
-        for position, name in enumerate(ranked, start=1)
-    ]
-
-    left, right = st.columns([1.35, 1], gap="large")
-    with left:
-        st.markdown(
-            "<p style='font-family:JetBrains Mono,monospace;font-size:1rem;font-weight:800;"
-            "letter-spacing:.16em;color:#94a3b8;text-transform:uppercase;margin:.4rem 0 1rem;'>"
-            "Top 12 Standings</p>",
-            unsafe_allow_html=True,
-        )
-        board_html = "<div style='display:grid;gap:.75rem;'>"
-        for row in standings_rows[:12]:
-            pnl_color = "#34d399" if not row["P&L"].startswith("-") else "#fb7185"
-            board_html += (
-                "<div style='display:grid;grid-template-columns:90px 1.8fr 1fr 1fr;align-items:center;"
-                "gap:1rem;background:linear-gradient(135deg,#111827,#1a2332);border:1px solid #243044;"
-                "border-radius:18px;padding:1rem 1.2rem;'>"
-                f"<span style='font-family:JetBrains Mono,monospace;font-size:1.6rem;font-weight:900;color:#64748b;'>#{row['Rank']}</span>"
-                f"<span style='font-family:JetBrains Mono,monospace;font-size:1.5rem;font-weight:800;color:#f1f5f9;'>{row['Team']}</span>"
-                f"<span style='font-family:JetBrains Mono,monospace;font-size:1.35rem;font-weight:700;color:#22d3ee;text-align:right;'>{row['Cash']}</span>"
-                f"<span style='font-family:JetBrains Mono,monospace;font-size:1.35rem;font-weight:800;color:{pnl_color};text-align:right;'>{row['P&L']}</span>"
-                "</div>"
-            )
-        board_html += "</div>"
-        st.markdown(board_html, unsafe_allow_html=True)
-
-    with right:
-        st.markdown(
-            "<p style='font-family:JetBrains Mono,monospace;font-size:1rem;font-weight:800;"
-            "letter-spacing:.16em;color:#94a3b8;text-transform:uppercase;margin:.4rem 0 1rem;'>"
-            "Full Field</p>",
-            unsafe_allow_html=True,
-        )
-        full_df = pd.DataFrame(standings_rows)
-        st.dataframe(
-            full_df,
-            use_container_width=True,
-            hide_index=True,
-            height=dataframe_height(len(full_df), row_px=35, max_height=760),
-        )
-
-# ── P&L chart ─────────────────────────────────────────────────────────────────
-if len(chart_rounds) > 1:
-    import numpy as np
-    
-    # Find min value across all teams to shift data for log scale
-    all_pnl = [val for team_pnl in chart_pnl.values() for val in team_pnl]
-    min_pnl = min(all_pnl) if all_pnl else 0
-    offset = abs(min_pnl) + 100 if min_pnl < 0 else 100  # Ensure all values are positive
-    
-    fig = go.Figure()
-    chart_names = ranked[: min(10, len(ranked))]
-    max_shifted = 0
-    
-    for i, name in enumerate(chart_names):
-        col = TEAM_COLORS[i % len(TEAM_COLORS)]
-        original_y = chart_pnl[name]
-        shifted_y = [val + offset for val in original_y]  # Shift for log scale
-        max_shifted = max(max_shifted, max(shifted_y)) if shifted_y else max_shifted
-        
-        fig.add_trace(go.Scatter(
-            x=chart_rounds,
-            y=shifted_y,
-            name=name,
-            mode="lines+markers",
-            line=dict(color=col, width=3.5, shape="spline", smoothing=1.2),
-            marker=dict(size=9, color=col, line=dict(width=2, color="#06080f")),
-            customdata=[format_gbp(value, signed=True) for value in original_y],
-            hovertemplate=f"<b>{name}</b><br>Round %{{x}}<br>P&L: %{{customdata}}<extra></extra>",
-        ))
-
-    # Add zero line (shifted)
-    fig.add_hline(y=offset, line_dash="dot", line_color="rgba(51,65,85,.5)", line_width=1)
-    
-    # Generate custom ticks that show original values (unshifted)
-    # Use log spaced values for better readability
-    tick_values_shifted = np.logspace(0, np.log10(max_shifted + 1) if max_shifted > 0 else 2, 8)
-    tick_labels = [format_gbp(v - offset, signed=True) for v in tick_values_shifted]
-
-    fig.update_layout(
-        template="plotly_dark",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, sans-serif", color="#94a3b8"),
-        title=None,
-        height=500,
-        margin=dict(l=70, r=30, t=20, b=70),
-        xaxis=dict(
-            title=dict(text="Round", font=dict(size=14, color="#64748b")),
-            dtick=1,
-            gridcolor="rgba(42,58,80,.4)",
-            zerolinecolor="rgba(42,58,80,.6)",
-            tickfont=dict(size=14, family="JetBrains Mono, monospace"),
-        ),
-        yaxis=dict(
-            title=dict(text="P&L (£) — Log Scale", font=dict(size=14, color="#64748b")),
-            type="log",
-            gridcolor="rgba(42,58,80,.3)",
-            zerolinecolor="rgba(42,58,80,.6)",
-            tickfont=dict(size=14, family="JetBrains Mono, monospace"),
-            tickvals=tick_values_shifted,
-            ticktext=tick_labels,
-            separatethousands=True,
-        ),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.2,
-            xanchor="center",
-            x=0.5,
-            font=dict(size=14, family="JetBrains Mono, monospace", color="#f1f5f9"),
-            bgcolor="rgba(0,0,0,0)",
-        ),
-        hoverlabel=dict(
-            bgcolor="#1a2332",
-            bordercolor="#2a3a50",
-            font=dict(size=14, family="JetBrains Mono, monospace"),
-        ),
-    )
-    st.caption(f"Trend chart shows the top {len(chart_names)} teams by current P&L to keep the screen readable.")
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-else:
+    # ── Compact standings table (all teams) ──────────────────────────────────────
     st.markdown(
-        "<p style='text-align:center;color:#475569;font-size:1.4rem;"
-        "margin:3rem 0;font-weight:600;letter-spacing:.02em;'>"
-        "Waiting for the first round to complete…</p>",
+        "<p style='font-family:JetBrains Mono,monospace;font-size:0.9rem;font-weight:800;"
+        "letter-spacing:.12em;color:#94a3b8;text-transform:uppercase;margin:.6rem 0 .8rem;'>"
+        "Full Standings</p>",
         unsafe_allow_html=True,
     )
+    
+    board_html = "<div style='display:grid;gap:0.4rem;'>"
+    for position, name in enumerate(ranked, start=1):
+        total_pnl = cash_pnl[name]
+        round_pnl = last_round_pnl[name]
+        pnl_color = "#34d399" if total_pnl >= 0 else "#fb7185"
+        round_pnl_color = "#34d399" if round_pnl >= 0 else "#fb7185"
+        
+        board_html += (
+            "<div style='display:grid;grid-template-columns:50px 1.2fr 1fr 1.1fr 1.1fr;align-items:center;"
+            "gap:0.8rem;background:linear-gradient(135deg,#111827,#1a2332);border:1px solid #243044;"
+            "border-radius:10px;padding:0.7rem 1rem;font-size:0.95rem;'>"
+            f"<span style='font-family:JetBrains Mono,monospace;font-weight:900;color:#64748b;'>#{position}</span>"
+            f"<span style='font-family:JetBrains Mono,monospace;font-weight:700;color:#f1f5f9;'>{name}</span>"
+            f"<span style='font-family:JetBrains Mono,monospace;font-weight:600;color:#22d3ee;text-align:right;'>{format_gbp(teams[name]['cash'])}</span>"
+            f"<span style='font-family:JetBrains Mono,monospace;font-weight:700;color:{pnl_color};text-align:right;'>{format_gbp(total_pnl, signed=True)}</span>"
+            f"<span style='font-family:JetBrains Mono,monospace;font-weight:700;color:{round_pnl_color};text-align:right;'>{format_gbp(round_pnl, signed=True)}</span>"
+            "</div>"
+        )
+    board_html += "</div>"
+    st.markdown(board_html, unsafe_allow_html=True)
+
+# ── Removed chart section (kept on-screen for competition fit) ──────────────────
 
 # ── Game over banner ───────────────────────────────────────────────────────────
 if game_over and ranked:
