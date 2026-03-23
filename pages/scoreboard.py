@@ -269,7 +269,8 @@ if len(chart_rounds) > 1:
             tickfont=dict(size=14, family="JetBrains Mono, monospace"),
         ),
         yaxis=dict(
-            title=dict(text="P&L (£)", font=dict(size=14, color="#64748b")),
+            title=dict(text="P&L (£) — Log Scale", font=dict(size=14, color="#64748b")),
+            type="symlog",
             gridcolor="rgba(42,58,80,.3)",
             zerolinecolor="rgba(42,58,80,.6)",
             tickfont=dict(size=14, family="JetBrains Mono, monospace"),
