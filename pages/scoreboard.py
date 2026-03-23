@@ -101,13 +101,8 @@ st.markdown(
     f"<p style='text-align:center;margin:.6rem 0 .1rem;'>"
     f"<span style='font-family:JetBrains Mono,monospace;font-size:6rem;font-weight:900;"
     f"color:#f1f5f9;letter-spacing:-.06em;line-height:1;'>{round_num}</span>"
-    f"<span style='font-family:JetBrains Mono,monospace;font-size:2rem;font-weight:500;"
-    f"color:#475569;vertical-align:super;margin-left:.15em;'>/ {TOTAL_ROUNDS}</span></p>"
-    f"<p style='text-align:center;margin:0 0 .4rem;'>"
-    f"<span style='font-family:JetBrains Mono,monospace;font-size:1.8rem;font-weight:800;"
-    f"letter-spacing:.08em;background:linear-gradient(135deg,#22d3ee,#a78bfa);"
-    f"-webkit-background-clip:text;-webkit-text-fill-color:transparent;'>"
-    f"{_stock_display}</span></p>"
+    f"<span style='font-family:JetBrains Mono,monospace;font-size:1.2rem;font-weight:500;"
+    f"color:#475569;vertical-align:super;margin-left:.5em;'>{_stock_display}</span></p>"
     f"<p style='text-align:center;margin:0 0 .6rem;'>"
     f"<span style='display:inline-block;padding:.3rem .9rem;border-radius:8px;"
     f"background:{_pc}18;border:1px solid {_pc}30;"
@@ -252,7 +247,6 @@ if ranked:
                     tickfont=dict(size=12, family="JetBrains Mono, monospace"),
                 ),
                 yaxis=dict(
-                    title=dict(text="P&L (£) — Log Scale", font=dict(size=12, color="#64748b")),
                     type="log",
                     gridcolor="rgba(42,58,80,.3)",
                     zerolinecolor="rgba(42,58,80,.6)",
@@ -294,7 +288,18 @@ if ranked:
             unsafe_allow_html=True,
         )
         
-        board_html = "<div style='display:grid;gap:0.35rem;max-height:500px;overflow-y:auto;'>"
+        # Column headers
+        board_html = "<div style='display:grid;gap:0.35rem;'>"
+        board_html += (
+            "<div style='display:grid;grid-template-columns:40px 1fr 1fr 1fr;align-items:center;"
+            "gap:0.6rem;padding:0.6rem 0.8rem;font-size:1.05rem;'>"
+            f"<span style='font-family:JetBrains Mono,monospace;font-weight:800;color:#94a3b8;'></span>"
+            f"<span style='font-family:JetBrains Mono,monospace;font-weight:800;color:#94a3b8;'>Team</span>"
+            f"<span style='font-family:JetBrains Mono,monospace;font-weight:800;color:#94a3b8;text-align:right;'>Cash</span>"
+            f"<span style='font-family:JetBrains Mono,monospace;font-weight:800;color:#94a3b8;text-align:right;'>PnL Last Round</span>"
+            "</div>"
+        )
+        
         for position, name in enumerate(ranked, start=1):
             round_pnl = last_round_pnl[name]
             round_pnl_color = "#34d399" if round_pnl >= 0 else "#fb7185"
@@ -302,10 +307,10 @@ if ranked:
             board_html += (
                 "<div style='display:grid;grid-template-columns:40px 1fr 1fr 1fr;align-items:center;"
                 "gap:0.6rem;background:linear-gradient(135deg,#111827,#1a2332);border:1px solid #243044;"
-                "border-radius:8px;padding:0.6rem 0.8rem;font-size:0.85rem;'>"
+                "border-radius:8px;padding:0.6rem 0.8rem;font-size:1.19rem;'>"
                 f"<span style='font-family:JetBrains Mono,monospace;font-weight:900;color:#64748b;'>#{position}</span>"
                 f"<span style='font-family:JetBrains Mono,monospace;font-weight:700;color:#f1f5f9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>{name}</span>"
-                f"<span style='font-family:JetBrains Mono,monospace;font-weight:600;color:#22d3ee;text-align:right;font-size:0.8rem;'>{format_gbp(teams[name]['cash'])}</span>"
+                f"<span style='font-family:JetBrains Mono,monospace;font-weight:600;color:#22d3ee;text-align:right;'>{format_gbp(teams[name]['cash'])}</span>"
                 f"<span style='font-family:JetBrains Mono,monospace;font-weight:700;color:{round_pnl_color};text-align:right;'>{format_gbp(round_pnl, signed=True)}</span>"
                 "</div>"
             )
