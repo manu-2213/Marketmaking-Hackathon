@@ -234,7 +234,8 @@ if len(chart_rounds) > 1:
     # Find min value across all teams to shift data for log scale
     all_pnl = [val for team_pnl in chart_pnl.values() for val in team_pnl]
     min_pnl = min(all_pnl) if all_pnl else 0
-    offset = abs(min_pnl) + 100 if min_pnl < 0 else 100  # Ensure all values are positive
+    # More extreme offset to compress large values more aggressively
+    offset = abs(min_pnl) + 1000 if min_pnl < 0 else 1000  # Larger offset for extreme compression
     
     fig = go.Figure()
     chart_names = ranked[: min(10, len(ranked))]
@@ -260,9 +261,9 @@ if len(chart_rounds) > 1:
     # Add zero line (shifted)
     fig.add_hline(y=offset, line_dash="dot", line_color="rgba(51,65,85,.5)", line_width=1)
     
-    # Generate custom ticks that show original values (unshifted)
-    # Use log spaced values for better readability
-    tick_values_shifted = np.logspace(0, np.log10(max_shifted + 1) if max_shifted > 0 else 2, 8)
+    # Generate custom ticks with extreme log spacing
+    # Use log spaced values for better readability with very wide range
+    tick_values_shifted = np.logspace(0, np.log10(max_shifted + 1) if max_shifted > 1 else 2, 12)
     tick_labels = [format_gbp(v - offset, signed=True) for v in tick_values_shifted]
 
     fig.update_layout(
