@@ -241,7 +241,6 @@ if ranked:
                 height=500,
                 margin=dict(l=50, r=20, t=10, b=50),
                 hovermode="x unified",
-                hoveron="points",
                 xaxis=dict(
                     title=dict(text="Round", font=dict(size=12, color="#64748b")),
                     dtick=1,
