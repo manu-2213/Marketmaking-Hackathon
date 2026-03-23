@@ -236,22 +236,41 @@ if ranked:
 
 # ── P&L chart ─────────────────────────────────────────────────────────────────
 if len(chart_rounds) > 1:
+    import numpy as np
+    
+    # Find min value across all teams to shift data for log scale
+    all_pnl = [val for team_pnl in chart_pnl.values() for val in team_pnl]
+    min_pnl = min(all_pnl) if all_pnl else 0
+    offset = abs(min_pnl) + 100 if min_pnl < 0 else 100  # Ensure all values are positive
+    
     fig = go.Figure()
     chart_names = ranked[: min(10, len(ranked))]
+    max_shifted = 0
+    
     for i, name in enumerate(chart_names):
         col = TEAM_COLORS[i % len(TEAM_COLORS)]
+        original_y = chart_pnl[name]
+        shifted_y = [val + offset for val in original_y]  # Shift for log scale
+        max_shifted = max(max_shifted, max(shifted_y)) if shifted_y else max_shifted
+        
         fig.add_trace(go.Scatter(
             x=chart_rounds,
-            y=chart_pnl[name],
+            y=shifted_y,
             name=name,
             mode="lines+markers",
             line=dict(color=col, width=3.5, shape="spline", smoothing=1.2),
             marker=dict(size=9, color=col, line=dict(width=2, color="#06080f")),
-            customdata=[format_gbp(value, signed=True) for value in chart_pnl[name]],
+            customdata=[format_gbp(value, signed=True) for value in original_y],
             hovertemplate=f"<b>{name}</b><br>Round %{{x}}<br>P&L: %{{customdata}}<extra></extra>",
         ))
 
-    fig.add_hline(y=0, line_dash="dot", line_color="rgba(51,65,85,.5)", line_width=1)
+    # Add zero line (shifted)
+    fig.add_hline(y=offset, line_dash="dot", line_color="rgba(51,65,85,.5)", line_width=1)
+    
+    # Generate custom ticks that show original values (unshifted)
+    # Use log spaced values for better readability
+    tick_values_shifted = np.logspace(0, np.log10(max_shifted + 1) if max_shifted > 0 else 2, 8)
+    tick_labels = [format_gbp(v - offset, signed=True) for v in tick_values_shifted]
 
     fig.update_layout(
         template="plotly_dark",
@@ -270,11 +289,12 @@ if len(chart_rounds) > 1:
         ),
         yaxis=dict(
             title=dict(text="P&L (£) — Log Scale", font=dict(size=14, color="#64748b")),
-            type="symlog",
+            type="log",
             gridcolor="rgba(42,58,80,.3)",
             zerolinecolor="rgba(42,58,80,.6)",
             tickfont=dict(size=14, family="JetBrains Mono, monospace"),
-            tickprefix="£",
+            tickvals=tick_values_shifted,
+            ticktext=tick_labels,
             separatethousands=True,
         ),
         legend=dict(
