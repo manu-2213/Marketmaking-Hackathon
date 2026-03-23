@@ -240,6 +240,8 @@ if ranked:
                 title=None,
                 height=500,
                 margin=dict(l=50, r=20, t=10, b=50),
+                hovermode="x unified",
+                hoveron="points",
                 xaxis=dict(
                     title=dict(text="Round", font=dict(size=12, color="#64748b")),
                     dtick=1,
@@ -256,11 +258,20 @@ if ranked:
                     ticktext=tick_labels,
                     separatethousands=True,
                 ),
-                legend=dict(visible=False),
+                legend=dict(
+                    orientation="v",
+                    yanchor="top",
+                    y=0.99,
+                    xanchor="left",
+                    x=0.01,
+                    font=dict(size=10, family="JetBrains Mono, monospace", color="#f1f5f9"),
+                    bgcolor="rgba(0,0,0,.3)",
+                ),
                 hoverlabel=dict(
                     bgcolor="#1a2332",
                     bordercolor="#2a3a50",
                     font=dict(size=12, family="JetBrains Mono, monospace"),
+                    namelength=-1,
                 ),
             )
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
