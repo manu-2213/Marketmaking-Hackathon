@@ -273,7 +273,7 @@ if ranked:
                     namelength=-1,
                 ),
             )
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True, "modeBarButtonsToRemove": ["pan2d", "lasso2d", "select2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d"], "displaylogo": False})
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": "hover", "modeBarButtonsToRemove": ["pan2d", "lasso2d", "select2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d"], "displaylogo": False})
         else:
             st.markdown(
                 "<p style='text-align:center;color:#475569;font-size:1.2rem;"
