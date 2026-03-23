@@ -163,10 +163,9 @@ medals = ["🥇", "🥈", "🥉"]
 
 if ranked:
     leader = ranked[0]
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Leader", leader)
-    m2.metric("Leader Cumul. P&L", format_gbp(cash_pnl[leader], signed=True))
-    m3.metric("Teams / Trades", f"{total_teams} / {completed_trades}")
+    m1, m2 = st.columns(2)
+    m1.metric("Leader Total Earned", format_gbp(cash_pnl[leader], signed=True))
+    m2.metric("Leader Last Round", format_gbp(last_round_pnl[leader], signed=True))
 
     # ── Compact top 6 medal cards ────────────────────────────────────────────────
     cards_html = "<p style='display:flex;justify-content:center;gap:0.8rem;flex-wrap:wrap;margin:.3rem 0 .8rem;'>"
@@ -228,7 +227,93 @@ if ranked:
     board_html += "</div>"
     st.markdown(board_html, unsafe_allow_html=True)
 
-# ── Removed chart section (kept on-screen for competition fit) ──────────────────
+# ── P&L chart ─────────────────────────────────────────────────────────────────
+if len(chart_rounds) > 1:
+    import numpy as np
+    
+    # Find min value across all teams to shift data for log scale
+    all_pnl = [val for team_pnl in chart_pnl.values() for val in team_pnl]
+    min_pnl = min(all_pnl) if all_pnl else 0
+    offset = abs(min_pnl) + 100 if min_pnl < 0 else 100  # Ensure all values are positive
+    
+    fig = go.Figure()
+    chart_names = ranked[: min(10, len(ranked))]
+    max_shifted = 0
+    
+    for i, name in enumerate(chart_names):
+        col = TEAM_COLORS[i % len(TEAM_COLORS)]
+        original_y = chart_pnl[name]
+        shifted_y = [val + offset for val in original_y]  # Shift for log scale
+        max_shifted = max(max_shifted, max(shifted_y)) if shifted_y else max_shifted
+        
+        fig.add_trace(go.Scatter(
+            x=chart_rounds,
+            y=shifted_y,
+            name=name,
+            mode="lines+markers",
+            line=dict(color=col, width=3.5, shape="spline", smoothing=1.2),
+            marker=dict(size=9, color=col, line=dict(width=2, color="#06080f")),
+            customdata=[format_gbp(value, signed=True) for value in original_y],
+            hovertemplate=f"<b>{name}</b><br>Round %{{x}}<br>P&L: %{{customdata}}<extra></extra>",
+        ))
+
+    # Add zero line (shifted)
+    fig.add_hline(y=offset, line_dash="dot", line_color="rgba(51,65,85,.5)", line_width=1)
+    
+    # Generate custom ticks that show original values (unshifted)
+    # Use log spaced values for better readability
+    tick_values_shifted = np.logspace(0, np.log10(max_shifted + 1) if max_shifted > 0 else 2, 8)
+    tick_labels = [format_gbp(v - offset, signed=True) for v in tick_values_shifted]
+
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, sans-serif", color="#94a3b8"),
+        title=None,
+        height=400,
+        margin=dict(l=70, r=30, t=20, b=70),
+        xaxis=dict(
+            title=dict(text="Round", font=dict(size=14, color="#64748b")),
+            dtick=1,
+            gridcolor="rgba(42,58,80,.4)",
+            zerolinecolor="rgba(42,58,80,.6)",
+            tickfont=dict(size=14, family="JetBrains Mono, monospace"),
+        ),
+        yaxis=dict(
+            title=dict(text="P&L (£) — Log Scale", font=dict(size=14, color="#64748b")),
+            type="log",
+            gridcolor="rgba(42,58,80,.3)",
+            zerolinecolor="rgba(42,58,80,.6)",
+            tickfont=dict(size=14, family="JetBrains Mono, monospace"),
+            tickvals=tick_values_shifted,
+            ticktext=tick_labels,
+            separatethousands=True,
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.2,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=14, family="JetBrains Mono, monospace", color="#f1f5f9"),
+            bgcolor="rgba(0,0,0,0)",
+        ),
+        hoverlabel=dict(
+            bgcolor="#1a2332",
+            bordercolor="#2a3a50",
+            font=dict(size=14, family="JetBrains Mono, monospace"),
+        ),
+    )
+    st.caption(f"Trend chart shows the top {len(chart_names)} teams by current P&L to keep the screen readable.")
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+else:
+    st.markdown(
+        "<p style='text-align:center;color:#475569;font-size:1.4rem;"
+        "margin:3rem 0;font-weight:600;letter-spacing:.02em;'>"
+        "Waiting for the first round to complete…</p>",
+        unsafe_allow_html=True,
+    )
 
 # ── Game over banner ───────────────────────────────────────────────────────────
 if game_over and ranked:
