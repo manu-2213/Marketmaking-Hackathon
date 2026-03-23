@@ -199,8 +199,8 @@ if ranked:
             # Find min value across all teams to shift data for log scale
             all_pnl = [val for team_pnl in chart_pnl.values() for val in team_pnl]
             min_pnl = min(all_pnl) if all_pnl else 0
-            # More extreme offset to compress large values more aggressively
-            offset = abs(min_pnl) + 1000 if min_pnl < 0 else 1000  # Larger offset for extreme compression
+            # Extremely aggressive offset to compress large values massively
+            offset = abs(min_pnl) + 10000 if min_pnl < 0 else 10000  # Massive offset for extreme compression
             
             fig = go.Figure()
             chart_names = ranked[: min(10, len(ranked))]
@@ -216,6 +216,7 @@ if ranked:
                     x=chart_rounds,
                     y=shifted_y,
                     name=name,
+                    showlegend=False,
                     mode="lines+markers",
                     line=dict(color=col, width=3.5, shape="spline", smoothing=1.2),
                     marker=dict(size=9, color=col, line=dict(width=2, color="#06080f")),
@@ -255,15 +256,7 @@ if ranked:
                     ticktext=tick_labels,
                     separatethousands=True,
                 ),
-                legend=dict(
-                    orientation="v",
-                    yanchor="top",
-                    y=0.99,
-                    xanchor="left",
-                    x=0.01,
-                    font=dict(size=10, family="JetBrains Mono, monospace", color="#f1f5f9"),
-                    bgcolor="rgba(0,0,0,.3)",
-                ),
+                legend=dict(visible=False),
                 hoverlabel=dict(
                     bgcolor="#1a2332",
                     bordercolor="#2a3a50",
