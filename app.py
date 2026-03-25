@@ -3,9 +3,9 @@ import uuid
 from pathlib import Path
 
 from config import STOCKS, TOTAL_ROUNDS
-from db import get_game_state, get_teams, get_sessions, get_spreads, get_true_prices, get_positions, get_team_for_session
+from db import get_game_state, get_teams, get_sessions, get_spreads, get_true_prices, get_positions, get_team_for_session, add_team
 from utils import spread_signature, team_cash_signature
-from invites import find_team_by_invite_code
+from invites import find_team_by_invite_code, make_team_invite_code
 from views import (
     render_login, render_sidebar, render_header,
     render_admin, render_submit, render_trade, render_reveal,
@@ -63,21 +63,43 @@ is_admin = st.session_state["is_admin"]
 # Re-associate session if browser refreshed
 if not is_admin and my_team is None:
     hinted_team = st.query_params.get("team")
-    invited_team = find_team_by_invite_code(st.query_params.get("invite"), teams)
+    invite_code = st.query_params.get("invite")
+    invited_team = find_team_by_invite_code(invite_code, teams)
+    
+    # Handle invite links: create team if provided and auto-join
+    if invite_code and hinted_team:
+        # Verify the invite code matches the team name
+        expected_code = make_team_invite_code(hinted_team)
+        if invite_code.strip().upper() == expected_code:
+            # Create team if it doesn't exist
+            if hinted_team not in teams:
+                add_team(hinted_team)
+                teams = get_teams()  # Refresh teams
+            # Auto-claim session for invite-link users
+            sessions = get_sessions()
+            if hinted_team not in sessions or not sessions[hinted_team]:
+                from db import sb
+                sb().table("team_sessions").delete().eq("team", hinted_team).execute()
+                sb().table("team_sessions").insert({"team": hinted_team, "session_id": SESSION_ID}).execute()
+                sessions[hinted_team] = SESSION_ID
+            my_team = hinted_team
+            st.session_state["claimed_team"] = hinted_team
+            st.query_params["team"] = hinted_team
 
-    if hinted_team and sessions.get(hinted_team) == SESSION_ID:
-        my_team = hinted_team
-        st.session_state["claimed_team"] = hinted_team
-    elif invited_team and sessions.get(invited_team) == SESSION_ID:
-        my_team = invited_team
-        st.session_state["claimed_team"] = invited_team
-        st.query_params["team"] = invited_team
-    else:
-        matched_team = get_team_for_session(SESSION_ID)
-        if matched_team:
-            my_team = matched_team
-            st.session_state["claimed_team"] = matched_team
-            st.query_params["team"] = matched_team
+    if not my_team:  # Still not set, try other methods
+        if hinted_team and sessions.get(hinted_team) == SESSION_ID:
+            my_team = hinted_team
+            st.session_state["claimed_team"] = hinted_team
+        elif invited_team and sessions.get(invited_team) == SESSION_ID:
+            my_team = invited_team
+            st.session_state["claimed_team"] = invited_team
+            st.query_params["team"] = invited_team
+        else:
+            matched_team = get_team_for_session(SESSION_ID)
+            if matched_team:
+                my_team = matched_team
+                st.session_state["claimed_team"] = matched_team
+                st.query_params["team"] = matched_team
 
 # ── Login gate ─────────────────────────────────────────────────────────────────
 if not is_admin and my_team is None:
