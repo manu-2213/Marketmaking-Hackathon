@@ -7,7 +7,7 @@ from db import (
     get_trade_log, set_game_state, set_true_price, settle_round, log_round, reset_game,
 )
 from invites import normalize_team_name
-from game import find_market_maker
+from game import find_market_maker, compute_team_sortino_ratios
 from utils import dataframe_height, format_gbp
 
 
@@ -62,8 +62,10 @@ def _render_teams_tab():
 
     with c2:
         if _teams:
+            sortino_ratios = compute_team_sortino_ratios()
             rows = [{"Team": t, "Status": "🟢 Online" if t in _sessions else "⚪ Not joined",
-                      "Cash": format_gbp(_teams[t]["cash"])} for t in sorted(_teams.keys())]
+                      "Cash": format_gbp(_teams[t]["cash"]), "Sortino": sortino_ratios.get(t, 0.0)} 
+                    for t in sorted(_teams.keys())]
             df = pd.DataFrame(rows)
             st.dataframe(df, use_container_width=True, hide_index=True, height=dataframe_height(len(df), max_height=520))
         else:
