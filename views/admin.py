@@ -6,6 +6,7 @@ from db import (
     get_teams, get_sessions, add_team, delete_all_teams, release_team,
     get_trade_log, set_game_state, set_true_price, settle_round, log_round, reset_game,
 )
+from invites import normalize_team_name
 from game import find_market_maker
 from utils import dataframe_height, format_gbp
 
@@ -48,14 +49,14 @@ def _render_teams_tab():
             new_team = st.text_input("", placeholder="Team name…", label_visibility="collapsed")
             submitted = st.form_submit_button("➕ Add Team", type="primary", use_container_width=True)
             if submitted:
-                if new_team.strip():
+                candidate = normalize_team_name(new_team)
+                if candidate:
                     if len(_teams) >= MAX_TEAMS:
                         st.warning(f"Team limit reached ({MAX_TEAMS}).")
-                    elif new_team.strip() not in _teams:
-                        add_team(new_team.strip())
-                        st.toast(f"✅ Added {new_team.strip()}")
+                    elif add_team(candidate):
+                        st.toast(f"✅ Added {candidate}")
                     else:
-                        st.warning("Already exists")
+                        st.warning("A team with that name already exists.")
                 else:
                     st.warning("Enter a name")
 

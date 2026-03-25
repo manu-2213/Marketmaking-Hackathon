@@ -2,9 +2,10 @@ import streamlit as st
 
 from config import ADMIN_PASSWORD
 from db import claim_team
+from invites import find_team_by_invite_code, make_team_invite_code
 
 
-def render_login(teams, sessions, session_id):
+def render_login(teams, sessions, session_id, invite_code=None):
     """Show the login gate. Returns True if st.stop() should be called."""
     st.markdown("""
     <div class='animate-in' style='text-align:center;padding:5rem 0 2rem'>
@@ -59,12 +60,28 @@ def render_login(teams, sessions, session_id):
         else:
             claimed = set(sessions.keys())
             available = [t for t in sorted(teams.keys()) if t not in claimed]
+            preselected_team = find_team_by_invite_code(invite_code, teams)
+
             if not teams:
                 st.info("Waiting for the organiser to register teams.")
             elif not available:
                 st.warning("All teams are claimed. Ask the organiser.")
             else:
-                chosen = st.selectbox("Select your team", available)
+                selectbox_index = 0
+                if preselected_team in available:
+                    selectbox_index = available.index(preselected_team)
+
+                if preselected_team and preselected_team not in available:
+                    taken_by = sessions.get(preselected_team)
+                    if taken_by and taken_by != session_id:
+                        st.error("This invite link has already been used by another active session.")
+
+                chosen = st.selectbox("Select your team", available, index=selectbox_index)
+                if preselected_team and preselected_team in available:
+                    st.caption(
+                        f"Invite code {make_team_invite_code(preselected_team)} matched team \"{preselected_team}\"."
+                    )
+
                 if st.button("Join Game →", type="primary", use_container_width=True):
                     if claim_team(chosen, session_id):
                         st.session_state["claimed_team"] = chosen

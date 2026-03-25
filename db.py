@@ -2,6 +2,7 @@ import streamlit as st
 from supabase import create_client, Client
 
 from config import STARTING_BUDGET
+from invites import normalize_team_name
 
 
 @st.cache_resource
@@ -30,7 +31,16 @@ def get_teams():
 
 
 def add_team(name):
-    sb().table("teams").insert({"name": name, "cash": STARTING_BUDGET}).execute()
+    normalized = normalize_team_name(name)
+    if not normalized:
+        return False
+
+    existing = get_teams()
+    if any(normalize_team_name(t).lower() == normalized.lower() for t in existing.keys()):
+        return False
+
+    sb().table("teams").insert({"name": normalized, "cash": STARTING_BUDGET}).execute()
+    return True
 
 
 def delete_all_teams():

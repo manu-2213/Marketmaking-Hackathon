@@ -74,6 +74,7 @@ def render_sidebar(is_admin, my_team, teams, positions, round_num, stock, phase)
                 release_team(my_team)
                 st.session_state["claimed_team"] = None
                 st.query_params.pop("team", None)
+                st.query_params.pop("invite", None)
                 st.rerun()
 
         st.markdown("---")

@@ -5,6 +5,7 @@ from pathlib import Path
 from config import STOCKS, TOTAL_ROUNDS
 from db import get_game_state, get_teams, get_sessions, get_spreads, get_true_prices, get_positions, get_team_for_session
 from utils import spread_signature, team_cash_signature
+from invites import find_team_by_invite_code
 from views import (
     render_login, render_sidebar, render_header,
     render_admin, render_submit, render_trade, render_reveal,
@@ -62,9 +63,15 @@ is_admin = st.session_state["is_admin"]
 # Re-associate session if browser refreshed
 if not is_admin and my_team is None:
     hinted_team = st.query_params.get("team")
+    invited_team = find_team_by_invite_code(st.query_params.get("invite"), teams)
+
     if hinted_team and sessions.get(hinted_team) == SESSION_ID:
         my_team = hinted_team
         st.session_state["claimed_team"] = hinted_team
+    elif invited_team and sessions.get(invited_team) == SESSION_ID:
+        my_team = invited_team
+        st.session_state["claimed_team"] = invited_team
+        st.query_params["team"] = invited_team
     else:
         matched_team = get_team_for_session(SESSION_ID)
         if matched_team:
@@ -74,7 +81,7 @@ if not is_admin and my_team is None:
 
 # ── Login gate ─────────────────────────────────────────────────────────────────
 if not is_admin and my_team is None:
-    render_login(teams, sessions, SESSION_ID)
+    render_login(teams, sessions, SESSION_ID, st.query_params.get("invite"))
     st.stop()
 
 # ── Sidebar + Header ──────────────────────────────────────────────────────────
